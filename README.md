@@ -51,7 +51,7 @@ Follow these steps to deploy the terminal locally:
 
 1.  **Clone the repository**
     ```bash
-    git clone https://github.com/yourusername/war-thunder-guesser.git
+    git clone https://github.com/remmy89/war-thunder-guesser.git
     cd war-thunder-guesser
     ```
 
