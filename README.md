@@ -78,7 +78,7 @@ war-thunder-guesser/
 │   ├── Game.tsx        # Main game loop and input logic
 │   └── HintCard.tsx    # UI component for individual clues
 ├── services/
-│   └── geminiService.ts # API fetcher and data normalization logic
+│   └── apiService.ts # API fetcher and data normalization logic
 ├── utils/
 │   └── audio.ts        # Web Audio API synthesizer implementation
 ├── App.tsx             # State management (Menu vs Game vs Result)
