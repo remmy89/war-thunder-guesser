@@ -27,7 +27,7 @@ export const HintCard: React.FC<HintCardProps> = ({ label, value, isRevealed, ic
   return (
     <div 
       className={`
-        relative overflow-hidden border transition-all duration-500 ease-in-out
+        relative overflow-hidden border transition-all duration-500 ease-in-out animate-fade-in
         ${isRevealed 
           ? 'bg-wt-panel border-wt-orange shadow-[0_0_10px_rgba(230,163,62,0.2)]' 
           : 'bg-[#202020] border-gray-700 opacity-60 grayscale'}

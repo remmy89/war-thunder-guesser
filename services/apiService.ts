@@ -83,7 +83,7 @@ const formatName = (id: string, country: string): string => {
     if (/\d/.test(word)) return word.toUpperCase();
 
     // Roman numerals check (I, II, III, IV, V, VI, VII, VIII, IX, X)
-    if (/^(x|ix|iv|v?i{0,3})$/i.test(word)) return word.toUpperCase();
+    if (/^(x|ix|iv|v?i{1,3}|v)$/i.test(word)) return word.toUpperCase();
     
     // Single letters often uppercase (Model T -> Model T)
     if (word.length === 1) return word.toUpperCase();

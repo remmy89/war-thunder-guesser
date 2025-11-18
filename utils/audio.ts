@@ -18,10 +18,10 @@ export const initAudio = () => {
 
 type SoundType = 'wrong' | 'reveal' | 'win' | 'loss' | 'click' | 'start';
 
-export const playSound = (type: SoundType) => {
+export const playSound = async (type: SoundType) => {
   const ctx = getContext();
   // Auto-resume if needed (though best done on user click)
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  if (ctx.state === 'suspended') await ctx.resume().catch(() => {});
 
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
