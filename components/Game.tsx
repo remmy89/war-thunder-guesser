@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { VehicleData, Difficulty, VehicleSummary } from '../types';
+import { VehicleData, Difficulty, VehicleSummary, GameStats } from '../types';
 import { HintCard } from './HintCard';
 import { Send, AlertTriangle, Search, Shield, Target } from 'lucide-react';
 import { playSound } from '../utils/audio';
@@ -20,9 +20,40 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
   const [guess, setGuess] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [stats, setStats] = useState<GameStats>({
+    gamesPlayed: 0,
+    wins: 0,
+    currentStreak: 0,
+    maxStreak: 0
+  });
   const inputRef = useRef<HTMLInputElement>(null);
 
   const maxAttempts = 6;
+
+  useEffect(() => {
+    const savedStats = localStorage.getItem('wt_guesser_stats');
+    if (savedStats) {
+      setStats(JSON.parse(savedStats));
+    }
+  }, []);
+
+  const updateLocalStats = (won: boolean) => {
+    const currentStats = { ...stats };
+    currentStats.gamesPlayed += 1;
+    
+    if (won) {
+      currentStats.wins += 1;
+      currentStats.currentStreak += 1;
+      if (currentStats.currentStreak > currentStats.maxStreak) {
+        currentStats.maxStreak = currentStats.currentStreak;
+      }
+    } else {
+      currentStats.currentStreak = 0;
+    }
+    
+    localStorage.setItem('wt_guesser_stats', JSON.stringify(currentStats));
+    setStats(currentStats);
+  };
 
   useEffect(() => {
     if (inputRef.current) {
@@ -193,12 +224,14 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
 
     if (isMatch) {
       playSound('win');
+      updateLocalStats(true);
       onGameOver(true);
     } else {
       const nextAttempts = attempts + 1;
       
       if (nextAttempts >= maxAttempts) {
         playSound('loss');
+        updateLocalStats(false);
         onGameOver(false);
       } else {
         playSound('wrong');
@@ -225,9 +258,17 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     <div className="w-full max-w-2xl mx-auto p-4">
       {/* Status Bar */}
       <div className="flex justify-between items-center mb-6 border-b border-gray-700 pb-4">
-        <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-          <span className="text-red-500 font-mono text-sm tracking-widest">LIVE FEED // SECURE</span>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-red-500 font-mono text-sm tracking-widest">LIVE FEED // SECURE</span>
+          </div>
+          <div className="hidden md:flex space-x-4 text-xs font-mono text-gray-500 border-l border-gray-700 pl-4">
+             <span>GAMES: <span className="text-gray-300">{stats.gamesPlayed}</span></span>
+             <span>STREAK: <span className="text-wt-orange">{stats.currentStreak}</span></span>
+             <span>BEST: <span className="text-gray-300">{stats.maxStreak}</span></span>
+             <span>WIN%: <span className="text-gray-300">{stats.gamesPlayed > 0 ? Math.round((stats.wins / stats.gamesPlayed) * 100) : 0}%</span></span>
+          </div>
         </div>
         <div className="font-mono text-sm text-gray-400">
           ATTEMPTS REMAINING: <span className="text-wt-orange text-xl font-bold">{maxAttempts - attempts}</span>

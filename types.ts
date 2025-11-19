@@ -1,4 +1,3 @@
-
 export enum GameState {
   MENU = 'MENU',
   LOADING = 'LOADING',
@@ -36,4 +35,11 @@ export interface VehicleSummary {
 export interface GuessResult {
   guess: string;
   isCorrect: boolean;
+}
+
+export interface GameStats {
+  gamesPlayed: number;
+  wins: number;
+  currentStreak: number;
+  maxStreak: number;
 }
