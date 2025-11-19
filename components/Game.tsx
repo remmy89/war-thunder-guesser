@@ -4,6 +4,11 @@ import { HintCard } from './HintCard';
 import { Send, AlertTriangle, Search, Shield, Target } from 'lucide-react';
 import { playSound } from '../utils/audio';
 
+const romanMap: Record<string, string> = {
+  'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', 'v': '5',
+  'vi': '6', 'vii': '7', 'viii': '8', 'ix': '9', 'x': '10'
+};
+
 interface GameProps {
   vehicle: VehicleData;
   pool: VehicleSummary[]; // Changed from options string[]
@@ -70,12 +75,26 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
 
   // Standardize string: remove special chars, lowercase
   const normalize = (str: string) => {
-    return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+    let processed = str.toLowerCase();
+    
+    if (difficulty === Difficulty.HARD) {
+      processed = processed.split(/([\s\-_/()]+)/).map(part => {
+        return romanMap[part] || part;
+      }).join('');
+    }
+
+    return processed.replace(/[^a-z0-9]/g, '');
   };
 
   // Split into meaningful parts
   const tokenize = (str: string) => {
-    return str.toLowerCase().split(/[\s\-_/()]+/).filter(t => t.length > 0);
+    let tokens = str.toLowerCase().split(/[\s\-_/()]+/).filter(t => t.length > 0);
+
+    if (difficulty === Difficulty.HARD) {
+      tokens = tokens.map(t => romanMap[t] || t);
+    }
+
+    return tokens;
   };
 
   // Levenshtein Distance for fuzzy matching
