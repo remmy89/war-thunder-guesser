@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { GameState, VehicleData, Difficulty, VehicleSummary } from './types';
 import { fetchMysteryVehicle } from './services/apiService';
 import { Game } from './components/Game';
-import { Radar, Trophy, AlertOctagon, Loader2, Play, ShieldAlert, RefreshCw, Crosshair, Skull } from 'lucide-react';
+import { Radar, Trophy, AlertOctagon, Loader2, Play, ShieldAlert, RefreshCw, Crosshair, Skull, Calendar } from 'lucide-react';
 import { initAudio, playSound } from './utils/audio';
 
 export default function App() {
@@ -13,14 +13,14 @@ export default function App() {
   const [pool, setPool] = useState<VehicleSummary[]>([]);
   const [loadingError, setLoadingError] = useState<string | null>(null);
 
-  const startGame = async (selectedDifficulty: Difficulty) => {
+  const startGame = async (selectedDifficulty: Difficulty, seed?: string) => {
     initAudio();
     playSound('start');
     setDifficulty(selectedDifficulty);
     setGameState(GameState.LOADING);
     setLoadingError(null);
     try {
-      const { vehicle, pool } = await fetchMysteryVehicle(selectedDifficulty);
+      const { vehicle, pool } = await fetchMysteryVehicle(selectedDifficulty, seed);
       setVehicle(vehicle);
       setPool(pool);
       setGameState(GameState.PLAYING);
@@ -110,6 +110,22 @@ export default function App() {
                     <span className="text-lg tracking-wider">HARD</span>
                   </div>
                   <span className="text-[10px] text-black/60 uppercase tracking-widest font-mono">Manual Entry</span>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => {
+                  const today = new Date().toISOString().split('T')[0];
+                  startGame(Difficulty.HARD, today);
+                }}
+                className="group relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-blue-600 hover:bg-blue-500 border border-blue-400 rounded-sm w-full sm:w-auto"
+              >
+                <div className="flex flex-col items-center">
+                  <div className="flex items-center mb-1">
+                    <Calendar className="w-4 h-4 mr-2" />
+                    <span className="text-lg tracking-wider">DAILY</span>
+                  </div>
+                  <span className="text-[10px] text-blue-200 uppercase tracking-widest font-mono">Global Target</span>
                 </div>
               </button>
             </div>

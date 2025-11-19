@@ -139,15 +139,40 @@ const generateAliases = (name: string, id: string): string[] => {
 // Removed 'tank' as it can be ambiguous in some contexts, prefer specific classes
 const fetchVehicleTypes = ['medium_tank', 'heavy_tank', 'tank_destroyer', 'spaa', 'light_tank'];
 
-export const fetchMysteryVehicle = async (difficulty: Difficulty): Promise<{ vehicle: VehicleData, pool: VehicleSummary[] }> => {
+class SeededRandom {
+  private seed: number;
+
+  constructor(seedStr: string) {
+    // Simple hash to convert string to number (FNV-1a)
+    let h = 0x811c9dc5;
+    for (let i = 0; i < seedStr.length; i++) {
+      h ^= seedStr.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    this.seed = h >>> 0;
+  }
+
+  // Mulberry32
+  next(): number {
+    let t = (this.seed += 0x6D2B79F5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+}
+
+export const fetchMysteryVehicle = async (difficulty: Difficulty, seed?: string): Promise<{ vehicle: VehicleData, pool: VehicleSummary[] }> => {
+  const rng = seed ? new SeededRandom(seed) : { next: Math.random };
+
   try {
     // 1. Pick a random ground vehicle type
-    const randomType = fetchVehicleTypes[Math.floor(Math.random() * fetchVehicleTypes.length)];
+    const randomType = fetchVehicleTypes[Math.floor(rng.next() * fetchVehicleTypes.length)];
     
     // 2. Fetch a list of vehicles of this type
     // STRICT FILTERING: No premiums, no packs, no squadron vehicles, no marketplace, no event vehicles.
     // In EASY mode, we fetch a larger limit to populate the suggestion pool
-    const limit = difficulty === Difficulty.EASY ? '1000' : '100';
+    // If seeded (Daily Challenge), we force a high limit to ensure consistency across all players regardless of difficulty
+    const limit = (difficulty === Difficulty.EASY || seed) ? '1000' : '100';
     
     const queryParams = new URLSearchParams({
       type: randomType,
@@ -220,7 +245,7 @@ export const fetchMysteryVehicle = async (difficulty: Difficulty): Promise<{ veh
     }
 
     // 3. Pick a random vehicle from the list
-    const selection = candidates[Math.floor(Math.random() * candidates.length)];
+    const selection = candidates[Math.floor(rng.next() * candidates.length)];
     
     const vehicle = await getFullDetails(selection.identifier);
 
