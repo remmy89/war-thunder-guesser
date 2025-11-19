@@ -83,12 +83,7 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
       result = result.filter(v => v.rank === vehicle.rank);
     }
 
-    // Filter 3: BR (Revealed at attempt 2)
-    if (attempts >= 2) {
-      result = result.filter(v => v.br.toFixed(1) === vehicle.br.toFixed(1));
-    }
-
-    // Filter 4: Type (Revealed at attempt 3)
+    // Filter 3: Type (Revealed at attempt 3)
     if (attempts >= 3) {
       result = result.filter(v => v.vehicleType === vehicle.vehicleType);
     }
