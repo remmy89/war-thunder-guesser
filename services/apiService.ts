@@ -170,9 +170,10 @@ export const fetchMysteryVehicle = async (difficulty: Difficulty, seed?: string)
     
     // 2. Fetch a list of vehicles of this type
     // STRICT FILTERING: No premiums, no packs, no squadron vehicles, no marketplace, no event vehicles.
-    // In EASY mode, we fetch a larger limit to populate the suggestion pool
-    // If seeded (Daily Challenge), we force a high limit to ensure consistency across all players regardless of difficulty
-    const limit = (difficulty === Difficulty.EASY || seed) ? '1000' : '100';
+    // Note: We always fetch a high limit (1000) to ensure a wide variety of vehicles is available
+    // for random selection, avoiding bias towards the first 100 returned by the API.
+    // In Easy mode, this also populates the suggestion dropdown.
+    const limit = '1000';
     
     const queryParams = new URLSearchParams({
       type: randomType,
@@ -202,7 +203,7 @@ export const fetchMysteryVehicle = async (difficulty: Difficulty, seed?: string)
     if (candidates.length === 0) {
       console.warn(`No tech tree vehicles found for ${randomType}, attempting fallback (medium_tank)...`);
       try {
-        const fallbackResponse = await fetch(`${API_BASE}/vehicles?type=medium_tank&limit=${difficulty === Difficulty.EASY ? '500' : '200'}`);
+        const fallbackResponse = await fetch(`${API_BASE}/vehicles?type=medium_tank&limit=500`);
         if (fallbackResponse.ok) {
             const fallbackData = await fallbackResponse.json();
             if (Array.isArray(fallbackData) && fallbackData.length > 0) {
@@ -262,9 +263,6 @@ export const fetchMysteryVehicle = async (difficulty: Difficulty, seed?: string)
           vehicleType: c.vehicle_type.replace(/_/g, ' ').toUpperCase(),
           image: c.images?.image || ''
        }));
-       
-       // Ensure the chosen vehicle is in the pool (it should be, but formatting might vary if we didn't map specifically)
-       // Since we derived pool from candidates and selection is from candidates, it is there.
     }
 
     return { vehicle, pool };
