@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { VehicleData, Difficulty, VehicleSummary, GameStats } from '../types';
 import { HintCard } from './HintCard';
-import { Send, AlertTriangle, Search, Shield, Target } from 'lucide-react';
+import { Send, AlertTriangle, Search, Shield, Target, ChevronRight } from 'lucide-react';
 import { playSound } from '../utils/audio';
 
 const romanMap: Record<string, string> = {
@@ -11,7 +11,7 @@ const romanMap: Record<string, string> = {
 
 interface GameProps {
   vehicle: VehicleData;
-  pool: VehicleSummary[]; // Changed from options string[]
+  pool: VehicleSummary[];
   difficulty: Difficulty;
   onGameOver: (won: boolean) => void;
 }
@@ -20,6 +20,9 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
   const [guess, setGuess] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
   const [stats, setStats] = useState<GameStats>({
     gamesPlayed: 0,
     wins: 0,
@@ -27,6 +30,7 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     maxStreak: 0
   });
   const inputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const maxAttempts = 6;
 
@@ -61,6 +65,12 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     }
   }, [attempts, difficulty]);
 
+  // Reset suggestion index when guess changes
+  useEffect(() => {
+    setActiveSuggestionIndex(-1);
+    setShowSuggestions(true);
+  }, [guess]);
+
   // Play reveal sound when attempts increase
   useEffect(() => {
     if (attempts > 0 && attempts < maxAttempts) {
@@ -69,37 +79,59 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     }
   }, [attempts]);
 
-  // Dynamic Filtering for Easy Mode
+  // --- Easy Mode: Hint-based Filtering ---
   const filteredPool = useMemo(() => {
     if (difficulty !== Difficulty.EASY) return [];
 
     let result = pool;
 
-    // Filter 1: Nation (Always revealed as Hint 0)
+    // Filter 1: Nation
     result = result.filter(v => v.nation === vehicle.nation);
 
-    // Filter 2: Rank (Revealed at attempt 1)
+    // Filter 2: Rank
     if (attempts >= 1) {
       result = result.filter(v => v.rank === vehicle.rank);
     }
 
-    // Filter 3: Type (Revealed at attempt 3)
+    // Filter 3: Type
     if (attempts >= 3) {
       result = result.filter(v => v.vehicleType === vehicle.vehicleType);
     }
 
-    // Filter by User Input (Search)
+    // Filter by User Input
     if (guess.trim()) {
       const search = guess.toLowerCase();
       result = result.filter(v => v.name.toLowerCase().includes(search));
     }
 
-    // Sort alphabetically
     return result.sort((a, b) => a.name.localeCompare(b.name));
 
   }, [pool, difficulty, vehicle, attempts, guess]);
 
-  // Standardize string: remove special chars, lowercase
+  // --- Hard Mode: Text-based Autocomplete ---
+  const suggestions = useMemo(() => {
+    if (difficulty !== Difficulty.HARD || !guess.trim()) return [];
+    
+    const search = guess.toLowerCase();
+    
+    return pool
+      .filter(v => v.name.toLowerCase().includes(search))
+      .sort((a, b) => {
+        // Smart Sort: Exact match > Starts with > Includes
+        const aName = a.name.toLowerCase();
+        const bName = b.name.toLowerCase();
+        
+        const aStarts = aName.startsWith(search);
+        const bStarts = bName.startsWith(search);
+        
+        if (aStarts && !bStarts) return -1;
+        if (!aStarts && bStarts) return 1;
+        
+        return a.name.localeCompare(b.name);
+      })
+      .slice(0, 10);
+  }, [pool, difficulty, guess]);
+
   const normalize = (str: string) => {
     let processed = str.toLowerCase();
     
@@ -112,7 +144,6 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     return processed.replace(/[^a-z0-9]/g, '');
   };
 
-  // Split into meaningful parts
   const tokenize = (str: string) => {
     let tokens = str.toLowerCase().split(/[\s\-_/()]+/).filter(t => t.length > 0);
 
@@ -123,7 +154,6 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     return tokens;
   };
 
-  // Levenshtein Distance for fuzzy matching
   const levenshtein = (a: string, b: string): number => {
     const matrix: number[][] = [];
 
@@ -141,10 +171,10 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
           matrix[i][j] = matrix[i - 1][j - 1];
         } else {
           matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1, // substitution
+            matrix[i - 1][j - 1] + 1,
             Math.min(
-              matrix[i][j - 1] + 1, // insertion
-              matrix[i - 1][j] + 1 // deletion
+              matrix[i][j - 1] + 1,
+              matrix[i - 1][j] + 1
             )
           );
         }
@@ -158,14 +188,11 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     const nInput = normalize(input);
     const nTarget = normalize(target);
     
-    // 1. Exact normalized match (covers "Marder Df-105" vs "marderdf105")
     if (nInput === nTarget) return true;
 
-    // 2. Levenshtein distance (covers typos like "Marder" vs "Mardar")
     const dist = levenshtein(nInput, nTarget);
     const maxLength = Math.max(nInput.length, nTarget.length);
     
-    // Allow flexibility based on string length
     if (maxLength > 6 && dist <= 2) return true;
     if (maxLength > 3 && dist <= 1) return true;
 
@@ -174,20 +201,16 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
 
   const isTokenMatch = (tokensA: string[], tokensB: string[]) => {
     if (tokensA.length === 0 || tokensB.length === 0) return false;
-    
-    // Check if tokensA is a subset of tokensB (e.g. "Marder" inside "Marder 1A3")
     const aInB = tokensA.every(token => tokensB.includes(token));
-    
-    // Check if tokensB is a subset of tokensA (e.g. "DF105" inside "Marder DF105")
-    // This allows users to type "Marder DF105" for the answer "DF105"
     const bInA = tokensB.every(token => tokensA.includes(token));
-    
     return aInB || bInA;
   };
 
   const checkGuess = (valueToCheck: string) => {
     if (!valueToCheck.trim()) return;
 
+    setShowSuggestions(false);
+    
     let isMatch = false;
 
     // 1. Check against Main Name
@@ -238,13 +261,42 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     }
   };
 
+  const selectSuggestion = (suggestion: string) => {
+    setGuess(suggestion);
+    setShowSuggestions(false);
+    inputRef.current?.focus();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Common Enter behavior
     if (e.key === 'Enter') {
+      e.preventDefault();
       if (difficulty === Difficulty.EASY && filteredPool.length > 0) {
-        // In Easy mode, Enter selects the first option if available
         checkGuess(filteredPool[0].name);
+      } else if (difficulty === Difficulty.HARD) {
+        if (activeSuggestionIndex >= 0 && suggestions.length > 0) {
+          selectSuggestion(suggestions[activeSuggestionIndex].name);
+        } else {
+          checkGuess(guess);
+        }
       } else {
         checkGuess(guess);
+      }
+      return;
+    }
+
+    // Hard Mode Navigation
+    if (difficulty === Difficulty.HARD && suggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setActiveSuggestionIndex(prev => 
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setActiveSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+      } else if (e.key === 'Escape') {
+        setShowSuggestions(false);
       }
     }
   };
@@ -328,13 +380,18 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
               {difficulty === Difficulty.HARD ? 'Identify Vehicle' : 'Search Database (Filters Active)'}
             </label>
             
-            <div className="flex space-x-2">
+            <div className="flex space-x-2 relative">
               <div className="relative flex-1">
                 <input
                   ref={inputRef}
                   type="text"
                   value={guess}
-                  onChange={(e) => setGuess(e.target.value)}
+                  onChange={(e) => {
+                    setGuess(e.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   onKeyDown={handleKeyDown}
                   placeholder={difficulty === Difficulty.HARD ? "Enter vehicle name..." : "Type to search..."}
                   className="w-full bg-black/50 border border-gray-600 text-wt-text px-4 py-3 pl-10 rounded-sm font-mono focus:outline-none focus:border-wt-orange focus:ring-1 focus:ring-wt-orange transition-all"
@@ -347,18 +404,43 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
                      <Search className="w-4 h-4 text-wt-orange" />
                   )}
                 </div>
+
+                {/* HARD MODE AUTOCOMPLETE DROPDOWN */}
+                {difficulty === Difficulty.HARD && showSuggestions && suggestions.length > 0 && (
+                  <div 
+                    ref={suggestionsRef}
+                    className="absolute z-50 left-0 right-0 mt-1 bg-[#1a1a1a] border border-wt-orange/50 shadow-xl max-h-60 overflow-y-auto rounded-sm"
+                  >
+                    {suggestions.map((item, idx) => (
+                      <button
+                        key={item.id}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          selectSuggestion(item.name);
+                        }}
+                        className={`
+                          w-full text-left px-4 py-2 text-sm font-mono border-b border-gray-800 last:border-0 flex items-center justify-between group
+                          ${idx === activeSuggestionIndex ? 'bg-wt-orange text-black' : 'text-gray-300 hover:bg-gray-800'}
+                        `}
+                      >
+                         <span className="truncate">{item.name}</span>
+                         {idx === activeSuggestionIndex && <ChevronRight className="w-3 h-3" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               
               <button
                 onClick={() => checkGuess(guess)}
-                className="bg-wt-orange hover:bg-yellow-600 text-black font-bold px-6 py-3 rounded-sm flex items-center space-x-2 transition-colors"
+                className="bg-wt-orange hover:bg-yellow-600 text-black font-bold px-6 py-3 rounded-sm flex items-center space-x-2 transition-colors shrink-0"
               >
                 <span>SEND</span>
                 <Send className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Assisted Mode Dropdown List */}
+            {/* EASY MODE LIST */}
             {difficulty === Difficulty.EASY && (
               <div className="mt-4 border-t border-gray-700 pt-2">
                 <p className="text-[10px] text-gray-500 font-mono mb-2 uppercase tracking-wider">
@@ -367,13 +449,12 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
                 
                 <div className="max-h-60 overflow-y-auto space-y-1 custom-scrollbar pr-1">
                   {filteredPool.length > 0 ? (
-                    filteredPool.slice(0, 50).map((item) => ( // Limit render to top 50 for performance
+                    filteredPool.slice(0, 50).map((item) => (
                       <button
                         key={item.id}
                         onClick={() => checkGuess(item.name)}
                         className="w-full flex items-center space-x-3 p-2 rounded-sm hover:bg-gray-800 border border-transparent hover:border-gray-600 group transition-all text-left"
                       >
-                        {/* Thumbnail */}
                         <div className="w-12 h-8 bg-black rounded-sm overflow-hidden shrink-0 border border-gray-700 relative">
                            {item.image && item.image.startsWith('http') ? (
                              <img src={item.image} alt="" className="w-full h-full object-cover" />
@@ -384,7 +465,6 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
                            )}
                         </div>
                         
-                        {/* Details */}
                         <div className="flex-1 min-w-0">
                           <div className="font-mono font-bold text-sm text-gray-200 group-hover:text-wt-orange truncate">
                             {item.name}
@@ -412,7 +492,6 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
         </div>
       </div>
 
-      {/* Error Toast */}
       {errorMsg && (
         <div className="mt-4 p-3 bg-red-900/30 border border-red-600/50 text-red-400 rounded-sm flex items-center justify-center animate-bounce">
           <AlertTriangle className="w-4 h-4 mr-2" />

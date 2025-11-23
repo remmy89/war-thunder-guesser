@@ -1,6 +1,13 @@
 import { VehicleData, Difficulty, VehicleSummary } from '../types';
 
-const API_BASE = 'https://www.wtvehiclesapi.sgambe.serv00.net/api';
+// In development, we use the Vite proxy to bypass CORS.
+// In production, we use the direct URL.
+const API_BASE = import.meta.env.DEV 
+  ? '/api' 
+  : 'https://www.wtvehiclesapi.sgambe.serv00.net/api';
+
+// Helper for delays to prevent rate limiting
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Mapping for roman numerals
 const toRoman = (num: number): string => {
@@ -44,6 +51,20 @@ const getCountryPrefix = (country: string): string => {
   return map[country.toLowerCase()] || country.toLowerCase();
 };
 
+// Explicit list of nations to query
+const API_NATIONS = [
+  'britain', 
+  'china', 
+  'france', 
+  'germany', 
+  'israel', // Fixed typo: was 'isreal'
+  'italy', 
+  'japan', 
+  'sweden', 
+  'usa', 
+  'ussr'
+];
+
 // Common acronyms that should always be uppercase
 const FORCE_UPPERCASE = new Set([
   'df', 'cm', 'pt', 'bk', 'is', 'kv', 'cv', 'pv', 'ikv', 'strv', 
@@ -53,7 +74,6 @@ const FORCE_UPPERCASE = new Set([
 ]);
 
 // Format technical identifiers into readable names
-// e.g. "cn_cm11" -> "CM11", "ussr_t_34_85_zis_53" -> "T-34-85 (ZiS-53)"
 const formatName = (id: string, country: string): string => {
   let name = id.toLowerCase();
   
@@ -82,20 +102,17 @@ const formatName = (id: string, country: string): string => {
     // If word contains a number, uppercase it (e.g. m1, t34, cm11 -> M1, T34, CM11)
     if (/\d/.test(word)) return word.toUpperCase();
 
-    // Roman numerals check (I, II, III, IV, V, VI, VII, VIII, IX, X)
+    // Roman numerals check
     if (/^(x|ix|iv|v?i{1,3}|v)$/i.test(word)) return word.toUpperCase();
     
-    // Single letters often uppercase (Model T -> Model T)
+    // Single letters often uppercase
     if (word.length === 1) return word.toUpperCase();
 
     return word.charAt(0).toUpperCase() + word.slice(1);
   }).join(' ');
 
-  // Restore hyphens for common patterns (Letter followed by Number)
-  // e.g. T 34 -> T-34, M 4 -> M-4
+  // Restore hyphens for common patterns
   name = name.replace(/([A-Za-z]) (\d)/g, '$1-$2'); 
-  
-  // Fix common issues like "T-34 85" -> "T-34-85"
   name = name.replace(/(\d)-(\d)/g, '$1-$2');
   name = name.replace(/(\d) (\d)/g, '$1-$2');
 
@@ -122,13 +139,11 @@ const generateAliases = (name: string, id: string): string[] => {
   aliases.add(name.toLowerCase().replace(/-/g, ''));
   aliases.add(name.toLowerCase().replace(/\s/g, ''));
 
-  // Extract just the model number if applicable (e.g. "T-34-85" -> "T-34")
   const nameParts = name.split(' ');
   if (nameParts.length > 1) {
     aliases.add(nameParts[0].toLowerCase());
   }
   
-  // Common shorthand (e.g. "Pz.Kpfw. IV" -> "Panzer IV")
   if (name.toLowerCase().includes('pzkpfw')) {
     aliases.add(name.toLowerCase().replace('pzkpfw', 'panzer'));
   }
@@ -136,8 +151,17 @@ const generateAliases = (name: string, id: string): string[] => {
   return Array.from(aliases);
 };
 
-// Removed 'tank' as it can be ambiguous in some contexts, prefer specific classes
-const fetchVehicleTypes = ['medium_tank', 'heavy_tank', 'tank_destroyer', 'spaa', 'light_tank'];
+const groundVehicleTypes = [
+  'tank',
+  'light_tank',
+  'medium_tank',
+  'heavy_tank',
+  'tank_destroyer',
+  'spaa',
+  'lbv',
+  'mbv',
+  'hbv'
+];
 
 class SeededRandom {
   private seed: number;
@@ -161,122 +185,132 @@ class SeededRandom {
   }
 }
 
-export const fetchMysteryVehicle = async (difficulty: Difficulty, seed?: string): Promise<{ vehicle: VehicleData, pool: VehicleSummary[] }> => {
-  const rng = seed ? new SeededRandom(seed) : { next: Math.random };
+const PAGE_SIZE = 200;
 
-  try {
-    // 1. Pick a random ground vehicle type
-    const randomType = fetchVehicleTypes[Math.floor(rng.next() * fetchVehicleTypes.length)];
-    
-    // 2. Fetch a list of vehicles of this type
-    // STRICT FILTERING: No premiums, no packs, no squadron vehicles, no marketplace, no event vehicles.
-    // Note: We always fetch a high limit (1000) to ensure a wide variety of vehicles is available
-    // for random selection, avoiding bias towards the first 100 returned by the API.
-    // In Easy mode, this also populates the suggestion dropdown.
-    const limit = '1000';
-    
-    const queryParams = new URLSearchParams({
-      type: randomType,
-      limit: limit,
+// Fetch all vehicles for a specific nation
+const fetchVehiclesByNation = async (country: string): Promise<any[]> => {
+  const collected: any[] = [];
+  const MAX_NATION_PAGES = 15; 
+
+  for (let page = 0; page < MAX_NATION_PAGES; page++) {
+    const params = new URLSearchParams({
+      limit: PAGE_SIZE.toString(),
+      page: page.toString(),
+      country,
       excludeEventVehicles: 'true',
-      isPack: 'false',
+      excludeKillstreak: 'true',
       isPremium: 'false',
+      isPack: 'false',
       isSquadronVehicle: 'false',
       isOnMarketplace: 'false'
     });
 
-    let candidates: any[] = [];
-    
     try {
-      const listResponse = await fetch(`${API_BASE}/vehicles?${queryParams.toString()}`);
-      if (listResponse.ok) {
-         const listData = await listResponse.json();
-         if (Array.isArray(listData) && listData.length > 0) {
-           candidates = listData;
-         }
+      const response = await fetch(`${API_BASE}/vehicles?${params.toString()}`);
+      if (!response.ok) {
+        console.warn(`Fetch failed for country ${country} (page ${page})`);
+        break;
       }
-    } catch (e) {
-      console.warn("Primary fetch failed:", e);
-    }
 
-    // Fallback 1: If specific type failed, try 'medium_tank' as a reliable fallback category
-    if (candidates.length === 0) {
-      console.warn(`No tech tree vehicles found for ${randomType}, attempting fallback (medium_tank)...`);
-      try {
-        const fallbackResponse = await fetch(`${API_BASE}/vehicles?type=medium_tank&limit=500`);
-        if (fallbackResponse.ok) {
-            const fallbackData = await fallbackResponse.json();
-            if (Array.isArray(fallbackData) && fallbackData.length > 0) {
-               // Filter client-side to be safe
-               candidates = fallbackData.filter((v: any) => 
-                   !v.is_premium && !v.is_pack && !v.squadron_vehicle && !v.on_marketplace && (!v.event || v.event === '')
-               );
-            }
-        }
-      } catch (e) {
-        console.warn("Fallback fetch failed:", e);
+      const payload = await response.json();
+      if (!Array.isArray(payload) || payload.length === 0) {
+        break;
       }
-    }
 
-    // Fallback 2: Emergency broad fetch (any vehicle, filtered locally)
-    if (candidates.length === 0) {
-       console.warn("Medium tank fallback failed. Attempting emergency broad fetch...");
-       try {
-         const emergencyResponse = await fetch(`${API_BASE}/vehicles?limit=500`);
-         if (emergencyResponse.ok) {
-            const emergencyData = await emergencyResponse.json();
-            if (Array.isArray(emergencyData)) {
-               candidates = emergencyData.filter((v: any) => 
-                   ['medium_tank', 'heavy_tank', 'light_tank', 'tank_destroyer', 'spaa'].includes(v.vehicle_type) &&
-                   !v.is_premium && !v.is_pack && !v.squadron_vehicle && !v.on_marketplace
-               );
-            }
-         } else {
-             // If the API explicitly returns an error code here
-             throw new Error(`API Error: ${emergencyResponse.status}`);
-         }
-       } catch (e) {
-         console.error("Emergency fetch failed:", e);
-         throw new Error("HQ Link Lost: The Vehicle Database is currently unreachable. Please check your connection or try again later.");
-       }
-    }
+      collected.push(...payload);
 
-    if (candidates.length === 0) {
-      throw new Error('Database Query Failed: No suitable vehicles found. The API may be experiencing instability.');
+      if (payload.length < PAGE_SIZE) {
+        break;
+      }
+    } catch (error) {
+      console.warn(`Fetch error for country ${country} (page ${page})`, error);
+      break;
     }
+  }
 
-    // 3. Pick a random vehicle from the list
-    const selection = candidates[Math.floor(rng.next() * candidates.length)];
+  return collected;
+};
+
+// Global in-memory cache to prevent refetching on "Next Mission"
+let globalCachedPool: any[] = [];
+let fetchedNations = new Set<string>();
+
+export const fetchMysteryVehicle = async (difficulty: Difficulty, seed?: string): Promise<{ vehicle: VehicleData, pool: VehicleSummary[] }> => {
+  const rng = seed ? new SeededRandom(seed) : { next: Math.random };
+
+  try {
+    let candidates: any[] = [];
+
+    // Determine which nation to fetch.
+    let targetNationIndex = Math.floor(rng.next() * API_NATIONS.length);
+    let targetNation = API_NATIONS[targetNationIndex];
     
+    
+    // If it's a fresh run or we need more data:
+    if (!fetchedNations.has(targetNation) || (seed && !fetchedNations.has(targetNation))) {
+      
+      const vehicles = await fetchVehiclesByNation(targetNation);
+      
+      // Filter immediately
+      const groundVehicles = vehicles.filter((v: any) => groundVehicleTypes.includes(v.vehicle_type));
+      
+      // Add to global cache
+      globalCachedPool = [...globalCachedPool, ...groundVehicles];
+      fetchedNations.add(targetNation);
+    }
+
+    // Use the global cache as our source of truth
+    candidates = globalCachedPool;
+
+    // Ensure we filter again just in case
+    candidates = candidates.filter((v: any) => groundVehicleTypes.includes(v.vehicle_type));
+
+    if (candidates.length === 0) {
+      throw new Error('Database Query Failed: No suitable vehicles found. Check connection.');
+    }
+
+    // Deduplicate
+    const uniqueCandidates = new Map<string, any>();
+    for (const candidate of candidates) {
+      if (!uniqueCandidates.has(candidate.identifier)) {
+        uniqueCandidates.set(candidate.identifier, candidate);
+      }
+    }
+
+    candidates = Array.from(uniqueCandidates.values());
+
+    // If seeded, we need to filter candidates to only the specific nation we picked to ensure determinism,
+    // otherwise the index might shift as we add more nations to the cache in future games.
+    let selectionPool = candidates;
+    if (seed) {
+      selectionPool = candidates.filter((c: any) => c.country === targetNation);
+    }
+
+    // Pick a random vehicle
+    const selection = selectionPool[Math.floor(rng.next() * selectionPool.length)];
     const vehicle = await getFullDetails(selection.identifier);
 
-    // 4. Generate pool for Easy Mode
-    let pool: VehicleSummary[] = [];
-    if (difficulty === Difficulty.EASY) {
-       // Map candidates to VehicleSummary structure
-       pool = candidates.map(c => ({
-          id: c.identifier,
-          name: formatName(c.identifier, c.country),
-          nation: getNationName(c.country),
-          rank: toRoman(c.era),
-          br: c.realistic_ground_br || c.realistic_br || c.arcade_br || 0.0,
-          vehicleType: c.vehicle_type.replace(/_/g, ' ').toUpperCase(),
-          image: c.images?.image || ''
-       }));
-    }
+    // Generate Pool for UI (Autocomplete/List)
+    const pool: VehicleSummary[] = candidates.map(c => ({
+      id: c.identifier,
+      name: formatName(c.identifier, c.country),
+      nation: getNationName(c.country),
+      rank: toRoman(c.era),
+      br: c.realistic_ground_br || c.realistic_br || c.arcade_br || 0.0,
+      vehicleType: c.vehicle_type.replace(/_/g, ' ').toUpperCase(),
+      image: c.images?.image || ''
+    }));
 
     return { vehicle, pool };
 
   } catch (error: any) {
     console.error("Error fetching from WT API:", error);
-    // Rethrow with a clean message if it's not already an Error object
     const message = error instanceof Error ? error.message : 'Critical Mission Failure: Data retrieval aborted.';
     throw new Error(message);
   }
 };
 
 const getFullDetails = async (identifier: string): Promise<VehicleData> => {
-    // 4. Fetch full details
     const detailResponse = await fetch(`${API_BASE}/vehicles/${identifier}`);
     if (!detailResponse.ok) {
       throw new Error('Failed to fetch vehicle details');
@@ -284,7 +318,7 @@ const getFullDetails = async (identifier: string): Promise<VehicleData> => {
 
     const detail = await detailResponse.json();
 
-    // 5. Process Armament
+    // Process Armament
     let armament = "Unknown Armament";
     if (detail.weapons && detail.weapons.length > 0) {
       const mainGun = detail.weapons.find((w: any) => 
@@ -300,14 +334,13 @@ const getFullDetails = async (identifier: string): Promise<VehicleData> => {
       }
     }
 
-    // 6. Format Data
+    // Format Data
     const name = formatName(detail.identifier, detail.country);
     const nation = getNationName(detail.country);
     const rank = toRoman(detail.era);
     const br = detail.realistic_ground_br || detail.realistic_br || detail.arcade_br || 0.0;
     const type = detail.vehicle_type.replace(/_/g, ' ').toUpperCase();
     
-    // Description is the image URL
     const description = detail.images?.image || "VISUAL DATA CORRUPTED. NO IMAGE AVAILABLE.";
 
     return {

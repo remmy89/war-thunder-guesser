@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { GameState, VehicleData, Difficulty, VehicleSummary } from './types';
 import { fetchMysteryVehicle } from './services/apiService';
@@ -37,14 +36,14 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#121212] text-gray-100 font-sans selection:bg-wt-orange selection:text-black overflow-x-hidden relative">
-      {/* Decorative Background Elements - Fixed container prevents scrollbar jitter */}
+      {/* Decorative Background Elements */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute inset-0 bg-camo-pattern opacity-5"></div>
         <div className="scanline"></div>
       </div>
       
-      {/* Header */}
-      <header className="relative z-10 border-b border-gray-800 bg-[#1a1a1a]/90 backdrop-blur-sm sticky top-0">
+      {/* Header: z-50 to stay on top */}
+      <header className="relative z-50 border-b border-gray-800 bg-[#1a1a1a]/90 backdrop-blur-md sticky top-0">
         <div className="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="bg-wt-orange p-1.5 rounded-sm">
@@ -64,7 +63,8 @@ export default function App() {
         </div>
       </header>
 
-      <main className="relative z-10 max-w-5xl mx-auto px-4 py-8 flex flex-col items-center min-h-[80vh] justify-center">
+      {/* Main: z-20 to sit above footer */}
+      <main className="relative z-20 max-w-5xl mx-auto px-4 py-8 flex flex-col items-center min-h-[80vh] justify-center">
         
         {gameState === GameState.MENU && (
           <div className="text-center max-w-lg w-full animate-in fade-in zoom-in duration-500">
@@ -160,7 +160,6 @@ export default function App() {
                ACQUIRING TARGET
              </h3>
              
-             {/* Simulated System Checks */}
              <div className="w-64 space-y-3">
                 <div>
                   <div className="flex justify-between text-[10px] font-mono text-gray-500 uppercase mb-1">
@@ -256,7 +255,7 @@ export default function App() {
             <button 
               onClick={() => {
                 playSound('click');
-                setGameState(GameState.MENU); // Go back to menu to choose difficulty again
+                setGameState(GameState.MENU);
               }}
               className="bg-white hover:bg-gray-200 text-black font-bold py-3 px-8 rounded-sm flex items-center justify-center mx-auto space-x-2 transition-colors"
             >
@@ -267,7 +266,7 @@ export default function App() {
         )}
       </main>
 
-      {/* Footer */}
+      {/* Footer: z-10 */}
       <footer className="relative z-10 text-center py-6 text-xs text-gray-600 font-mono">
         <p>WT-GUESSER v1.0.0 // UNOFFICIAL WAR THUNDER API</p>
       </footer>
