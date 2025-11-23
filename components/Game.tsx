@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { VehicleData, Difficulty, VehicleSummary, GameStats } from '../types';
 import { HintCard } from './HintCard';
-import { Send, AlertTriangle, Search, Shield, Target, ChevronRight } from 'lucide-react';
+import { Send, AlertTriangle, Search, Shield, Target, ChevronRight, Wifi, Eye, Lock } from 'lucide-react';
 import { playSound } from '../utils/audio';
 
 const romanMap: Record<string, string> = {
@@ -33,6 +33,11 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const maxAttempts = 6;
+
+  // Calculate blur based on attempts remaining
+  // Starts high (30px) and goes to 0px
+  const currentBlur = Math.max(0, 30 - (attempts * 6));
+  const isImageAvailable = vehicle.description && vehicle.description.startsWith('http');
 
   useEffect(() => {
     const savedStats = localStorage.getItem('wt_guesser_stats');
@@ -313,12 +318,65 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
           <div className="hidden md:flex space-x-4 text-xs font-mono text-gray-500 border-l border-gray-700 pl-4">
              <span>GAMES: <span className="text-gray-300">{stats.gamesPlayed}</span></span>
              <span>STREAK: <span className="text-wt-orange">{stats.currentStreak}</span></span>
-             <span>BEST: <span className="text-gray-300">{stats.maxStreak}</span></span>
-             <span>WIN%: <span className="text-gray-300">{stats.gamesPlayed > 0 ? Math.round((stats.wins / stats.gamesPlayed) * 100) : 0}%</span></span>
           </div>
         </div>
         <div className="font-mono text-sm text-gray-400">
-          ATTEMPTS REMAINING: <span className="text-wt-orange text-xl font-bold">{maxAttempts - attempts}</span>
+          ATTEMPTS: <span className="text-wt-orange text-xl font-bold">{maxAttempts - attempts}</span>
+        </div>
+      </div>
+
+      {/* --- INTEL INTERCEPT MONITOR (Visual Feed) --- */}
+      <div 
+        className="relative w-full bg-black border border-gray-700 rounded-sm overflow-hidden mb-6 shadow-2xl group select-none"
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        {/* Header Strip */}
+        <div className="absolute top-0 left-0 right-0 h-8 bg-black/80 backdrop-blur border-b border-gray-800 z-30 flex items-center justify-between px-3">
+           <div className="flex items-center space-x-2">
+             <Wifi className={`w-3 h-3 ${attempts < 3 ? 'text-green-500' : 'text-red-500'} animate-pulse`} />
+             <span className="text-[10px] font-mono text-gray-400">SAT_LINK_V4.0 // STREAMING</span>
+           </div>
+           <div className="flex items-center space-x-2">
+             <span className="text-[10px] font-mono text-wt-orange border border-wt-orange/30 px-1.5 py-0.5 rounded-sm">
+               SIGNAL QUALITY: {Math.min(100, Math.round((attempts / 5) * 100))}%
+             </span>
+           </div>
+        </div>
+
+        {/* The Image Container */}
+        <div className="relative aspect-video w-full bg-[#0a0a0a]">
+           {isImageAvailable ? (
+             <>
+               <img 
+                 src={vehicle.description} 
+                 alt="Target Intel"
+                 draggable="false"
+                 style={{ 
+                   filter: `blur(${currentBlur}px) grayscale(${attempts < 5 ? 100 : 0}%) contrast(1.2)`,
+                   opacity: 0.9 
+                 }}
+                 className="w-full h-full object-cover transition-all duration-1000 ease-in-out pointer-events-none"
+               />
+               {/* CRT Scanlines Overlay */}
+               <div className="absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 bg-[length:100%_2px,3px_100%] pointer-events-none opacity-50"></div>
+               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent z-20 pointer-events-none"></div>
+             </>
+           ) : (
+             <div className="w-full h-full flex flex-col items-center justify-center text-gray-600 space-y-2">
+                <Eye className="w-12 h-12 opacity-20" />
+                <span className="font-mono text-xs tracking-widest opacity-50">NO VISUAL FEED AVAILABLE</span>
+             </div>
+           )}
+           
+           {/* Center "Encrypted" Label if blur is high */}
+           {currentBlur > 10 && (
+              <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                 <div className="bg-black/70 border border-red-500/30 px-4 py-2 flex items-center space-x-2 backdrop-blur-sm animate-pulse">
+                    <Lock className="w-4 h-4 text-red-500" />
+                    <span className="text-red-500 font-mono text-xs tracking-widest font-bold">IMAGE ENCRYPTED</span>
+                 </div>
+              </div>
+           )}
         </div>
       </div>
 
@@ -352,20 +410,14 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
           iconType="type" 
           index={3}
         />
-        <HintCard 
-          label="MAIN ARMAMENT" 
-          value={vehicle.armament} 
-          isRevealed={attempts >= 4} 
-          iconType="gun" 
-          index={4}
-        />
+        {/* Full width armament card */}
         <div className="md:col-span-2">
           <HintCard 
-            label="VISUAL INTEL" 
-            value={vehicle.description} 
-            isRevealed={attempts >= 5} 
-            iconType="desc" 
-            index={5}
+            label="MAIN ARMAMENT" 
+            value={vehicle.armament} 
+            isRevealed={attempts >= 4} 
+            iconType="gun" 
+            index={4}
           />
         </div>
       </div>
