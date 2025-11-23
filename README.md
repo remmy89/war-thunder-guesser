@@ -26,16 +26,11 @@ War Thunder Guesser mimics a military intelligence terminal. Your goal is to ide
 
 ## ✨ Key Features
 
-*   **Progressive Hint System:**
-    1.  **Start:** Nation
-    2.  **Attempt 1:** Rank
-    3.  **Attempt 2:** Battle Rating (BR)
-    4.  **Attempt 3:** Vehicle Class
-    5.  **Attempt 4:** Main Armament (e.g., "105mm L7A3")
-    6.  **Attempt 5:** Visual Intel (Blurred/Obscured Image)
-*   **Immersive UI:** Designed with a "Dark Military OS" aesthetic, featuring scanlines, CRT effects, and tactical animations.
-*   **Audio Feedback:** Custom Web Audio API synthesizer for UI sounds (typing, revealing hints, victory/defeat themes) without external assets.
-*   **Live Data:** Fetches vehicle data dynamically from a custom War Thunder API.
+- **Progressive Hint System:** Nation → Rank → BR → Class → Armament → Visuals (revealed across attempts)
+- **Achievements & Service Record:** New system to track medals and progress (Sharpshooter, Iron Cross, Cold War Specialist, Veteran, Tank Ace). Open `Menu → VIEW SERVICE RECORD` to view medals and progress; achievements persist in `localStorage`.
+- **Immersive UI:** "Dark Military OS" aesthetic with scanlines, CRT effects, and tactical animations.
+- **Audio Feedback:** Built-in Web Audio synthesizer for UI sounds (no external audio files required).
+- **Live Data:** Fetches vehicle data dynamically from a custom War Thunder API.
 
 ## 🛠️ Tech Stack
 
@@ -75,15 +70,23 @@ Follow these steps to deploy the terminal locally:
 ```text
 war-thunder-guesser/
 ├── components/
-│   ├── Game.tsx        # Main game loop and input logic
+│   ├── Game.tsx        # Main game loop and input logic (now reports attempts for achievements)
+│   ├── ServiceRecord.tsx # Modal: shows achievements and progress
 │   └── HintCard.tsx    # UI component for individual clues
 ├── services/
 │   └── apiService.ts # API fetcher and data normalization logic
 ├── utils/
 │   └── audio.ts        # Web Audio API synthesizer implementation
+│   └── achivements.ts  
 ├── App.tsx             # State management (Menu vs Game vs Result)
 └── types.ts            # TypeScript interfaces
 ```
+
+## 📝 What's New (v1.1.0)
+
+- Added Achievements system and a `Service Record` modal where players can view unlocked medals and track progress.
+- Achievements are stored under `localStorage` keys: `wt_guesser_achievements` and `wt_guesser_stats`.
+- `components/Game.tsx` updated to report attempt counts to `App.tsx` so achievements (e.g. Sharpshooter) can be detected.
 
 ## ⚠️ Disclaimer
 
