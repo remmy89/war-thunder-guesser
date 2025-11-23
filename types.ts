@@ -43,3 +43,26 @@ export interface GameStats {
   currentStreak: number;
   maxStreak: number;
 }
+
+
+export type AchievementId = 'iron_cross' | 'sharpshooter' | 'cold_war' | 'veteran' | 'tank_ace';
+
+export interface Achievement {
+  id: AchievementId;
+  title: string;
+  description: string;
+  icon: string; 
+  unlocked: boolean;
+  progress?: number;
+  maxProgress?: number;
+}
+
+export interface AchievementState {
+  unlockedIds: string[];
+  stats: {
+    germanWins: number;
+    coldWarStreak: number; 
+    totalWins: number;
+    perfectGames: number;
+  };
+}

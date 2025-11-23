@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { GameState, VehicleData, Difficulty, VehicleSummary } from './types';
+import { GameState, VehicleData, Difficulty, VehicleSummary, Achievement } from './types';
 import { fetchMysteryVehicle } from './services/apiService';
 import { Game } from './components/Game';
-import { Radar, Trophy, AlertOctagon, Loader2, Play, ShieldAlert, RefreshCw, Crosshair, Skull, Calendar } from 'lucide-react';
+import { ServiceRecord } from './components/ServiceRecord';
+import { Radar, Trophy, AlertOctagon, Loader2, Play, ShieldAlert, RefreshCw, Crosshair, Skull, Calendar, Medal } from 'lucide-react';
 import { initAudio, playSound } from './utils/audio';
+import { processGameResult } from './utils/achievements';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
@@ -11,6 +13,8 @@ export default function App() {
   const [difficulty, setDifficulty] = useState<Difficulty>(Difficulty.HARD);
   const [pool, setPool] = useState<VehicleSummary[]>([]);
   const [loadingError, setLoadingError] = useState<string | null>(null);
+  const [showServiceRecord, setShowServiceRecord] = useState(false);
+  const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
 
   const startGame = async (selectedDifficulty: Difficulty, seed?: string) => {
     initAudio();
@@ -18,6 +22,7 @@ export default function App() {
     setDifficulty(selectedDifficulty);
     setGameState(GameState.LOADING);
     setLoadingError(null);
+    setNewAchievements([]); // Reset any pending alerts
     try {
       const { vehicle, pool } = await fetchMysteryVehicle(selectedDifficulty, seed);
       setVehicle(vehicle);
@@ -30,8 +35,22 @@ export default function App() {
     }
   };
 
-  const handleGameOver = (won: boolean) => {
+  const handleGameOver = (won: boolean, attempts: number) => {
     setGameState(won ? GameState.VICTORY : GameState.GAME_OVER);
+    
+    // Calculate Achievements
+    if (vehicle) {
+      // We need to fetch current stats to get the streak, but for now let's loosely assume 
+      // the achievement service handles internal logic. 
+      // ideally we pass the streak from the Game component or simple read from storage.
+      const stats = JSON.parse(localStorage.getItem('wt_guesser_stats') || '{"currentStreak": 0}');
+      
+      const { newUnlocks } = processGameResult(vehicle, won, attempts, stats.currentStreak);
+      if (newUnlocks.length > 0) {
+        setNewAchievements(newUnlocks);
+        setTimeout(() => playSound('win'), 500); // Extra sound for medal
+      }
+    }
   };
 
   return (
@@ -45,7 +64,7 @@ export default function App() {
       {/* Header: z-50 to stay on top */}
       <header className="relative z-50 border-b border-gray-800 bg-[#1a1a1a]/90 backdrop-blur-md sticky top-0">
         <div className="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center">
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-3 cursor-pointer" onClick={() => setGameState(GameState.MENU)}>
             <div className="bg-wt-orange p-1.5 rounded-sm">
               <Radar className="w-6 h-6 text-black" />
             </div>
@@ -86,47 +105,58 @@ export default function App() {
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <button 
-                onClick={() => startGame(Difficulty.EASY)}
-                className="group relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-gray-800 border border-gray-700 hover:border-green-500 hover:bg-gray-750 rounded-sm w-full sm:w-auto"
-              >
-                <div className="flex flex-col items-center">
-                  <div className="flex items-center mb-1">
-                    <Crosshair className="w-4 h-4 mr-2 text-green-500" />
-                    <span className="text-lg tracking-wider">EASY</span>
+            <div className="flex flex-col gap-4 justify-center">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center w-full">
+                <button 
+                  onClick={() => startGame(Difficulty.EASY)}
+                  className="group relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-gray-800 border border-gray-700 hover:border-green-500 hover:bg-gray-750 rounded-sm w-full sm:w-auto"
+                >
+                  <div className="flex flex-col items-center">
+                    <div className="flex items-center mb-1">
+                      <Crosshair className="w-4 h-4 mr-2 text-green-500" />
+                      <span className="text-lg tracking-wider">EASY</span>
+                    </div>
+                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-mono group-hover:text-gray-400">Assisted Mode</span>
                   </div>
-                  <span className="text-[10px] text-gray-500 uppercase tracking-widest font-mono group-hover:text-gray-400">Assisted Mode</span>
-                </div>
-              </button>
+                </button>
 
-              <button 
-                onClick={() => startGame(Difficulty.HARD)}
-                className="group relative flex items-center justify-center px-6 py-4 font-bold text-black transition-all duration-200 bg-wt-orange hover:bg-white rounded-sm w-full sm:w-auto"
-              >
-                <div className="flex flex-col items-center">
-                  <div className="flex items-center mb-1">
-                    <Skull className="w-4 h-4 mr-2" />
-                    <span className="text-lg tracking-wider">HARD</span>
+                <button 
+                  onClick={() => startGame(Difficulty.HARD)}
+                  className="group relative flex items-center justify-center px-6 py-4 font-bold text-black transition-all duration-200 bg-wt-orange hover:bg-white rounded-sm w-full sm:w-auto"
+                >
+                  <div className="flex flex-col items-center">
+                    <div className="flex items-center mb-1">
+                      <Skull className="w-4 h-4 mr-2" />
+                      <span className="text-lg tracking-wider">HARD</span>
+                    </div>
+                    <span className="text-[10px] text-black/60 uppercase tracking-widest font-mono">Manual Entry</span>
                   </div>
-                  <span className="text-[10px] text-black/60 uppercase tracking-widest font-mono">Manual Entry</span>
-                </div>
-              </button>
+                </button>
 
-              <button 
-                onClick={() => {
-                  const today = new Date().toISOString().split('T')[0];
-                  startGame(Difficulty.HARD, today);
-                }}
-                className="group relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-blue-600 hover:bg-blue-500 border border-blue-400 rounded-sm w-full sm:w-auto"
-              >
-                <div className="flex flex-col items-center">
-                  <div className="flex items-center mb-1">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    <span className="text-lg tracking-wider">DAILY</span>
+                <button 
+                  onClick={() => {
+                    const today = new Date().toISOString().split('T')[0];
+                    startGame(Difficulty.HARD, today);
+                  }}
+                  className="group relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-blue-600 hover:bg-blue-500 border border-blue-400 rounded-sm w-full sm:w-auto"
+                >
+                  <div className="flex flex-col items-center">
+                    <div className="flex items-center mb-1">
+                      <Calendar className="w-4 h-4 mr-2" />
+                      <span className="text-lg tracking-wider">DAILY</span>
+                    </div>
+                    <span className="text-[10px] text-blue-200 uppercase tracking-widest font-mono">Global Target</span>
                   </div>
-                  <span className="text-[10px] text-blue-200 uppercase tracking-widest font-mono">Global Target</span>
-                </div>
+                </button>
+              </div>
+
+              {/* Service Record Button */}
+              <button 
+                onClick={() => setShowServiceRecord(true)}
+                className="mx-auto mt-2 flex items-center justify-center px-4 py-2 text-xs font-mono text-gray-500 hover:text-wt-orange hover:bg-gray-800 rounded-sm transition-colors w-auto"
+              >
+                <Medal className="w-4 h-4 mr-2" />
+                VIEW SERVICE RECORD
               </button>
             </div>
           </div>
@@ -213,6 +243,22 @@ export default function App() {
                 {gameState === GameState.VICTORY ? 'Superior Intel confirmed.' : 'Vehicle escaped identification.'}
               </p>
             </div>
+            
+            {/* Achievement Unlock Notification */}
+            {newAchievements.length > 0 && (
+              <div className="mb-6 space-y-2">
+                {newAchievements.map(ach => (
+                  <div key={ach.id} className="bg-gradient-to-r from-wt-orange/20 to-transparent border-l-4 border-wt-orange p-3 text-left animate-in slide-in-from-left duration-700">
+                    <div className="flex items-center text-wt-orange mb-1">
+                       <Medal className="w-4 h-4 mr-2" />
+                       <span className="text-xs font-bold uppercase tracking-widest">New Medal Awarded</span>
+                    </div>
+                    <div className="font-bold text-white">{ach.title}</div>
+                    <div className="text-xs text-gray-400">{ach.description}</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="bg-black/40 p-6 rounded-sm border border-gray-700 mb-8 text-left">
               <p className="text-xs text-gray-500 font-mono mb-1 uppercase">Identity Confirmed</p>
@@ -268,8 +314,13 @@ export default function App() {
 
       {/* Footer: z-10 */}
       <footer className="relative z-10 text-center py-6 text-xs text-gray-600 font-mono">
-        <p>WT-GUESSER v1.0.0 // UNOFFICIAL WAR THUNDER API</p>
+        <p>WT-GUESSER v1.1.0 // UNOFFICIAL WAR THUNDER API</p>
       </footer>
+      
+      {/* Service Record Modal */}
+      {showServiceRecord && (
+        <ServiceRecord onClose={() => setShowServiceRecord(false)} />
+      )}
 
       <style>{`
         @keyframes loading {
