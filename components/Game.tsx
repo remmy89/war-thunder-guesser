@@ -1,13 +1,11 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { VehicleData, Difficulty, VehicleSummary, GameStats } from '../types';
 import { HintCard } from './HintCard';
 import { Send, AlertTriangle, Search, Shield, Target, ChevronRight, Wifi, Eye, Lock } from 'lucide-react';
 import { playSound } from '../utils/audio';
-
-const romanMap: Record<string, string> = {
-  'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', 'v': '5',
-  'vi': '6', 'vii': '7', 'viii': '8', 'ix': '9', 'x': '10'
-};
+import { GAME_CONFIG, ROMAN_TO_ARABIC } from '../constants';
+import { getGameStats, updateGameStats } from '../utils/storage';
+import { normalize, tokenize, isFuzzyMatch, isTokenMatch } from '../utils/stringUtils';
 
 interface GameProps {
   vehicle: VehicleData;
@@ -22,205 +20,139 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
-
-  const [stats, setStats] = useState<GameStats>({
-    gamesPlayed: 0,
-    wins: 0,
-    currentStreak: 0,
-    maxStreak: 0
-  });
+  const [stats, setStats] = useState<GameStats>(getGameStats);
+  
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  const maxAttempts = 6;
-  const currentBlur = Math.max(0, 30 - (attempts * 6));
-  const isImageAvailable = vehicle.description && vehicle.description.startsWith('http');
+  const { MAX_ATTEMPTS, MAX_BLUR, BLUR_STEP, SUGGESTIONS_LIMIT, POOL_DISPLAY_LIMIT } = GAME_CONFIG;
+  const currentBlur = Math.max(0, MAX_BLUR - (attempts * BLUR_STEP));
+  const isImageAvailable = vehicle.description?.startsWith('http') ?? false;
+  const convertRoman = difficulty === Difficulty.HARD;
 
+  // Focus input on mount and after attempts
   useEffect(() => {
-    const savedStats = localStorage.getItem('wt_guesser_stats');
-    if (savedStats) {
-      setStats(JSON.parse(savedStats));
-    }
-  }, []);
-
-  const updateLocalStats = (won: boolean) => {
-    const currentStats = { ...stats };
-    currentStats.gamesPlayed += 1;
-    
-    if (won) {
-      currentStats.wins += 1;
-      currentStats.currentStreak += 1;
-      if (currentStats.currentStreak > currentStats.maxStreak) {
-        currentStats.maxStreak = currentStats.currentStreak;
-      }
-    } else {
-      currentStats.currentStreak = 0;
-    }
-    
-    localStorage.setItem('wt_guesser_stats', JSON.stringify(currentStats));
-    setStats(currentStats);
-  };
-
-  useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
+    inputRef.current?.focus();
   }, [attempts, difficulty]);
 
+  // Reset suggestion index when guess changes
   useEffect(() => {
     setActiveSuggestionIndex(-1);
     setShowSuggestions(true);
   }, [guess]);
 
+  // Play reveal sound on new hints
   useEffect(() => {
-    if (attempts > 0 && attempts < maxAttempts) {
+    if (attempts > 0 && attempts < MAX_ATTEMPTS) {
       const timer = setTimeout(() => playSound('reveal'), 200);
       return () => clearTimeout(timer);
     }
-  }, [attempts]);
+  }, [attempts, MAX_ATTEMPTS]);
 
+  // Filter pool for Easy mode with revealed hints
   const filteredPool = useMemo(() => {
     if (difficulty !== Difficulty.EASY) return [];
 
-    let result = pool;
-    result = result.filter(v => v.nation === vehicle.nation);
+    let result = pool.filter((v) => v.nation === vehicle.nation);
 
-    if (attempts >= 1) result = result.filter(v => v.rank === vehicle.rank);
-    if (attempts >= 3) result = result.filter(v => v.vehicleType === vehicle.vehicleType);
+    if (attempts >= 1) result = result.filter((v) => v.rank === vehicle.rank);
+    if (attempts >= 3) result = result.filter((v) => v.vehicleType === vehicle.vehicleType);
 
     if (guess.trim()) {
       const search = guess.toLowerCase();
-      result = result.filter(v => v.name.toLowerCase().includes(search));
+      result = result.filter((v) => v.name.toLowerCase().includes(search));
     }
+    
     return result.sort((a, b) => a.name.localeCompare(b.name));
-  }, [pool, difficulty, vehicle, attempts, guess]);
+  }, [pool, difficulty, vehicle.nation, vehicle.rank, vehicle.vehicleType, attempts, guess]);
 
+  // Suggestions for Hard mode autocomplete
   const suggestions = useMemo(() => {
     if (difficulty !== Difficulty.HARD || !guess.trim()) return [];
-    
+
     const search = guess.toLowerCase();
-    
+
     return pool
-      .filter(v => v.name.toLowerCase().includes(search))
+      .filter((v) => v.name.toLowerCase().includes(search))
       .sort((a, b) => {
         const aName = a.name.toLowerCase();
         const bName = b.name.toLowerCase();
         const aStarts = aName.startsWith(search);
         const bStarts = bName.startsWith(search);
-        
+
         if (aStarts && !bStarts) return -1;
         if (!aStarts && bStarts) return 1;
-        
+
         return a.name.localeCompare(b.name);
       })
-      .slice(0, 10);
-  }, [pool, difficulty, guess]);
+      .slice(0, SUGGESTIONS_LIMIT);
+  }, [pool, difficulty, guess, SUGGESTIONS_LIMIT]);
 
-  const normalize = (str: string) => {
-    let processed = str.toLowerCase();
-    if (difficulty === Difficulty.HARD) {
-      processed = processed.split(/([\s\-_/()]+)/).map(part => {
-        return romanMap[part] || part;
-      }).join('');
+  // Check if guess matches the vehicle
+  const checkGuessMatch = useCallback((valueToCheck: string): boolean => {
+    // Direct name match
+    if (isFuzzyMatch(valueToCheck, vehicle.name, convertRoman)) {
+      return true;
     }
-    return processed.replace(/[^a-z0-9]/g, '');
-  };
 
-  const tokenize = (str: string) => {
-    let tokens = str.toLowerCase().split(/[\s\-_/()]+/).filter(t => t.length > 0);
-    if (difficulty === Difficulty.HARD) {
-      tokens = tokens.map(t => romanMap[t] || t);
+    // Token-based match
+    const guessTokens = tokenize(valueToCheck, convertRoman);
+    const nameTokens = tokenize(vehicle.name, convertRoman);
+    if (isTokenMatch(guessTokens, nameTokens)) {
+      return true;
     }
-    return tokens;
-  };
 
-  const levenshtein = (a: string, b: string): number => {
-    const matrix: number[][] = [];
-    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-
-    for (let i = 1; i <= b.length; i++) {
-      for (let j = 1; j <= a.length; j++) {
-        if (b.charAt(i - 1) === a.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
-        }
+    // Check aliases
+    for (const alias of vehicle.aliases) {
+      if (isFuzzyMatch(valueToCheck, alias, convertRoman)) {
+        return true;
+      }
+      if (isTokenMatch(tokenize(valueToCheck, convertRoman), tokenize(alias, convertRoman))) {
+        return true;
       }
     }
-    return matrix[b.length][a.length];
-  };
 
-  const isFuzzyMatch = (input: string, target: string) => {
-    const nInput = normalize(input);
-    const nTarget = normalize(target);
-    if (nInput === nTarget) return true;
-    const dist = levenshtein(nInput, nTarget);
-    const maxLength = Math.max(nInput.length, nTarget.length);
-    if (maxLength > 6 && dist <= 2) return true;
-    if (maxLength > 3 && dist <= 1) return true;
     return false;
-  };
+  }, [vehicle.name, vehicle.aliases, convertRoman]);
 
-  const isTokenMatch = (tokensA: string[], tokensB: string[]) => {
-    if (tokensA.length === 0 || tokensB.length === 0) return false;
-    return tokensA.every(token => tokensB.includes(token)) || tokensB.every(token => tokensA.includes(token));
-  };
-
-  const checkGuess = (valueToCheck: string) => {
+  // Handle guess submission
+  const checkGuess = useCallback((valueToCheck: string) => {
     if (!valueToCheck.trim()) return;
     setShowSuggestions(false);
-    
-    let isMatch = false;
 
-    if (isFuzzyMatch(valueToCheck, vehicle.name)) {
-        isMatch = true;
-    } else {
-        const guessTokens = tokenize(valueToCheck);
-        const nameTokens = tokenize(vehicle.name);
-        if (isTokenMatch(guessTokens, nameTokens)) isMatch = true;
-    }
-
-    if (!isMatch) {
-      for (const alias of vehicle.aliases) {
-        if (isFuzzyMatch(valueToCheck, alias)) {
-          isMatch = true;
-          break;
-        }
-        if (isTokenMatch(tokenize(valueToCheck), tokenize(alias))) {
-          isMatch = true;
-          break;
-        }
-      }
-    }
+    const isMatch = checkGuessMatch(valueToCheck);
 
     if (isMatch) {
       playSound('win');
-      updateLocalStats(true);
-      onGameOver(true, attempts); 
+      const newStats = updateGameStats(true);
+      setStats(newStats);
+      onGameOver(true, attempts);
     } else {
       const nextAttempts = attempts + 1;
-      if (nextAttempts >= maxAttempts) {
+      if (nextAttempts >= MAX_ATTEMPTS) {
         playSound('loss');
-        updateLocalStats(false);
+        const newStats = updateGameStats(false);
+        setStats(newStats);
         onGameOver(false, nextAttempts);
       } else {
         playSound('wrong');
         setAttempts(nextAttempts);
         setGuess('');
-        setErrorMsg(`Incorrect. Intel updated.`);
+        setErrorMsg('Incorrect. Intel updated.');
         setTimeout(() => setErrorMsg(null), 2000);
       }
     }
-  };
+  }, [checkGuessMatch, attempts, MAX_ATTEMPTS, onGameOver]);
 
-  const selectSuggestion = (suggestion: string) => {
+  // Handle suggestion selection
+  const selectSuggestion = useCallback((suggestion: string) => {
     setGuess(suggestion);
     setShowSuggestions(false);
     inputRef.current?.focus();
-  };
+  }, []);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  // Handle keyboard navigation
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       if (difficulty === Difficulty.EASY && filteredPool.length > 0) {
@@ -240,15 +172,21 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     if (difficulty === Difficulty.HARD && suggestions.length > 0) {
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setActiveSuggestionIndex(prev => prev < suggestions.length - 1 ? prev + 1 : prev);
+        setActiveSuggestionIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : prev));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setActiveSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
+        setActiveSuggestionIndex((prev) => (prev > 0 ? prev - 1 : -1));
       } else if (e.key === 'Escape') {
         setShowSuggestions(false);
       }
     }
-  };
+  }, [difficulty, filteredPool, suggestions, activeSuggestionIndex, guess, checkGuess, selectSuggestion]);
+
+  // Handle input change
+  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setGuess(e.target.value);
+    setShowSuggestions(true);
+  }, []);
 
   return (
     <div className="w-full max-w-2xl mx-auto p-4">
@@ -256,16 +194,16 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
       <div className="flex justify-between items-center mb-6 border-b border-gray-700 pb-4">
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" aria-hidden="true" />
             <span className="text-red-500 font-mono text-sm tracking-widest">LIVE FEED // SECURE</span>
           </div>
           <div className="hidden md:flex space-x-4 text-xs font-mono text-gray-500 border-l border-gray-700 pl-4">
-             <span>GAMES: <span className="text-gray-300">{stats.gamesPlayed}</span></span>
-             <span>STREAK: <span className="text-wt-orange">{stats.currentStreak}</span></span>
+            <span>GAMES: <span className="text-gray-300">{stats.gamesPlayed}</span></span>
+            <span>STREAK: <span className="text-wt-orange">{stats.currentStreak}</span></span>
           </div>
         </div>
-        <div className="font-mono text-sm text-gray-400">
-          ATTEMPTS: <span className="text-wt-orange text-xl font-bold">{maxAttempts - attempts}</span>
+        <div className="font-mono text-sm text-gray-400" role="status" aria-live="polite">
+          ATTEMPTS: <span className="text-wt-orange text-xl font-bold">{MAX_ATTEMPTS - attempts}</span>
         </div>
       </div>
 
@@ -343,18 +281,17 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
                   ref={inputRef}
                   type="text"
                   value={guess}
-                  onChange={(e) => {
-                    setGuess(e.target.value);
-                    setShowSuggestions(true);
-                  }}
+                  onChange={handleInputChange}
                   onFocus={() => setShowSuggestions(true)}
                   onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                   onKeyDown={handleKeyDown}
                   placeholder={difficulty === Difficulty.HARD ? "Enter vehicle name..." : "Type to search..."}
                   className="w-full bg-black/50 border border-gray-600 text-wt-text px-4 py-3 pl-10 rounded-sm font-mono focus:outline-none focus:border-wt-orange focus:ring-1 focus:ring-wt-orange transition-all"
                   autoComplete="off"
+                  aria-label="Vehicle name guess"
+                  aria-describedby={errorMsg ? "error-message" : undefined}
                 />
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none" aria-hidden="true">
                   {difficulty === Difficulty.HARD ? <Search className="w-4 h-4 text-gray-500" /> : <Search className="w-4 h-4 text-wt-orange" />}
                 </div>
 
@@ -362,10 +299,14 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
                   <div 
                     ref={suggestionsRef}
                     className="absolute z-50 left-0 right-0 mt-1 bg-[#1a1a1a] border border-wt-orange/50 shadow-xl max-h-60 overflow-y-auto rounded-sm"
+                    role="listbox"
+                    aria-label="Vehicle suggestions"
                   >
                     {suggestions.map((item, idx) => (
                       <button
                         key={item.id}
+                        role="option"
+                        aria-selected={idx === activeSuggestionIndex}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           selectSuggestion(item.name);
@@ -375,8 +316,8 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
                           ${idx === activeSuggestionIndex ? 'bg-wt-orange text-black' : 'text-gray-300 hover:bg-gray-800'}
                         `}
                       >
-                         <span className="truncate">{item.name}</span>
-                         {idx === activeSuggestionIndex && <ChevronRight className="w-3 h-3" />}
+                        <span className="truncate">{item.name}</span>
+                        {idx === activeSuggestionIndex && <ChevronRight className="w-3 h-3" aria-hidden="true" />}
                       </button>
                     ))}
                   </div>
@@ -397,43 +338,44 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
                 <p className="text-[10px] text-gray-500 font-mono mb-2 uppercase tracking-wider">
                   Potential Matches: <span className="text-white">{filteredPool.length}</span>
                 </p>
-                <div className="max-h-60 overflow-y-auto space-y-1 custom-scrollbar pr-1">
+                <div className="max-h-60 overflow-y-auto space-y-1 custom-scrollbar pr-1" role="list" aria-label="Matching vehicles">
                   {filteredPool.length > 0 ? (
-                    filteredPool.slice(0, 50).map((item) => (
+                    filteredPool.slice(0, POOL_DISPLAY_LIMIT).map((item) => (
                       <button
                         key={item.id}
                         onClick={() => checkGuess(item.name)}
                         className="w-full flex items-center space-x-3 p-2 rounded-sm hover:bg-gray-800 border border-transparent hover:border-gray-600 group transition-all text-left"
+                        aria-label={`Select ${item.name}`}
                       >
-                        <div className="w-12 h-8 bg-black rounded-sm overflow-hidden shrink-0 border border-gray-700 relative">
-                           {item.image && item.image.startsWith('http') ? (
-                             <img src={item.image} alt="" className="w-full h-full object-cover" />
-                           ) : (
-                             <div className="w-full h-full flex items-center justify-center text-gray-700">
-                               <Shield className="w-3 h-3" />
-                             </div>
-                           )}
+                        <div className="w-12 h-8 bg-black rounded-sm overflow-hidden shrink-0 border border-gray-700 relative" aria-hidden="true">
+                          {item.image && item.image.startsWith('http') ? (
+                            <img src={item.image} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-700">
+                              <Shield className="w-3 h-3" />
+                            </div>
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-mono font-bold text-sm text-gray-200 group-hover:text-wt-orange truncate">
                             {item.name}
                           </div>
                           <div className="flex items-center space-x-3 text-[10px] text-gray-500">
-                             <span className="flex items-center"><Shield className="w-2 h-2 mr-1"/> {item.rank}</span>
-                             <span className="flex items-center"><Target className="w-2 h-2 mr-1"/> {item.br.toFixed(1)}</span>
+                            <span className="flex items-center"><Shield className="w-2 h-2 mr-1" aria-hidden="true" /> {item.rank}</span>
+                            <span className="flex items-center"><Target className="w-2 h-2 mr-1" aria-hidden="true" /> {item.br.toFixed(1)}</span>
                           </div>
                         </div>
                       </button>
                     ))
                   ) : (
-                     <div className="p-4 text-center text-gray-500 font-mono text-xs">
-                        NO MATCHING VEHICLES IN DATABASE
-                     </div>
+                    <div className="p-4 text-center text-gray-500 font-mono text-xs">
+                      NO MATCHING VEHICLES IN DATABASE
+                    </div>
                   )}
-                  {filteredPool.length > 50 && (
-                     <div className="text-center text-[10px] text-gray-600 py-1">
-                        ... {filteredPool.length - 50} more matches ...
-                     </div>
+                  {filteredPool.length > POOL_DISPLAY_LIMIT && (
+                    <div className="text-center text-[10px] text-gray-600 py-1">
+                      ... {filteredPool.length - POOL_DISPLAY_LIMIT} more matches ...
+                    </div>
                   )}
                 </div>
               </div>
@@ -441,8 +383,12 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
         </div>
       </div>
       {errorMsg && (
-        <div className="mt-4 p-3 bg-red-900/30 border border-red-600/50 text-red-400 rounded-sm flex items-center justify-center animate-bounce">
-          <AlertTriangle className="w-4 h-4 mr-2" />
+        <div 
+          id="error-message"
+          role="alert"
+          className="mt-4 p-3 bg-red-900/30 border border-red-600/50 text-red-400 rounded-sm flex items-center justify-center animate-bounce"
+        >
+          <AlertTriangle className="w-4 h-4 mr-2" aria-hidden="true" />
           <span className="font-mono text-sm">{errorMsg}</span>
         </div>
       )}

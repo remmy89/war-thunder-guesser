@@ -5,7 +5,8 @@
 A tactical vehicle identification game built with React, TypeScript, and Vite. Test your knowledge of War Thunder ground vehicles by identifying tanks based on progressively revealed intelligence data.
 
 ![Status](https://img.shields.io/badge/Status-Operational-green)
-![Tech](https://img.shields.io/badge/Built%20With-React%20%2B%20Tailwind-blue)
+![Version](https://img.shields.io/badge/Version-1.2.0-blue)
+![Tech](https://img.shields.io/badge/Built%20With-React%2019%20%2B%20Tailwind-blue)
 ![License](https://img.shields.io/badge/License-MIT-orange)
 
 ## 📋 Mission Briefing
@@ -70,19 +71,47 @@ Follow these steps to deploy the terminal locally:
 ```text
 war-thunder-guesser/
 ├── components/
-│   ├── Game.tsx        # Main game loop and input logic (now reports attempts for achievements)
+│   ├── Game.tsx          # Main game loop and input logic
+│   ├── HintCard.tsx      # UI component for individual clues
 │   ├── ServiceRecord.tsx # Modal: shows achievements and progress
-│   └── HintCard.tsx    # UI component for individual clues
+│   └── ErrorBoundary.tsx # React error boundary for graceful error handling
 ├── services/
-│   └── apiService.ts # API fetcher and data normalization logic
+│   └── apiService.ts     # API fetcher and data normalization logic
 ├── utils/
-│   └── audio.ts        # Web Audio API synthesizer implementation
-│   └── achivements.ts  
-├── App.tsx             # State management (Menu vs Game vs Result)
-└── types.ts            # TypeScript interfaces
+│   ├── achievements.ts   # Achievement checking and unlocking logic
+│   ├── audio.ts          # Web Audio API synthesizer implementation
+│   ├── storage.ts        # Safe localStorage operations with error handling
+│   └── stringUtils.ts    # String manipulation and fuzzy matching utilities
+├── App.tsx               # State management (Menu vs Game vs Result)
+├── constants.ts          # Centralized configuration and constants
+├── types.ts              # TypeScript interfaces with readonly modifiers
+└── vite-env.d.ts         # Vite TypeScript type definitions
 ```
 
-## 📝 What's New (v1.1.0)
+## 📝 What's New (v1.2.0)
+
+### Code Quality & Architecture
+- **Centralized Constants**: Extracted all magic numbers and configuration into `constants.ts`
+- **Utility Modules**: Created reusable utility functions in `utils/stringUtils.ts` and `utils/storage.ts`
+- **Type Safety**: Added `readonly` modifiers to interfaces, removed `any` types from API service
+- **Error Boundaries**: Added `ErrorBoundary` component for graceful error handling
+
+### Performance Optimizations
+- **React Hooks**: Added `useCallback` for event handlers to prevent unnecessary re-renders
+- **Memoization**: Improved `useMemo` dependencies for better caching
+- **Lazy Loading**: Added `loading="lazy"` to images
+
+### Accessibility Improvements
+- Added ARIA attributes (`role`, `aria-label`, `aria-live`, `aria-hidden`)
+- Improved keyboard navigation support
+- Added proper semantic HTML structure
+
+### Developer Experience
+- Proper TypeScript interfaces for API responses
+- JSDoc comments for utility functions
+- Clean code separation following single responsibility principle
+
+## 📝 Previous Updates (v1.1.0)
 
 - Added Achievements system and a `Service Record` modal where players can view unlocked medals and track progress.
 - Achievements are stored under `localStorage` keys: `wt_guesser_achievements` and `wt_guesser_stats`.

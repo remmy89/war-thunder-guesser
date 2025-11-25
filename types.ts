@@ -3,38 +3,38 @@ export enum GameState {
   LOADING = 'LOADING',
   PLAYING = 'PLAYING',
   GAME_OVER = 'GAME_OVER',
-  VICTORY = 'VICTORY'
+  VICTORY = 'VICTORY',
 }
 
 export enum Difficulty {
   EASY = 'EASY',
-  HARD = 'HARD'
+  HARD = 'HARD',
 }
 
 export interface VehicleData {
-  name: string;
-  nation: string;
-  rank: string;
-  br: number;
-  vehicleType: string;
-  armament: string;
-  description: string;
-  aliases: string[];
+  readonly name: string;
+  readonly nation: string;
+  readonly rank: string;
+  readonly br: number;
+  readonly vehicleType: string;
+  readonly armament: string;
+  readonly description: string;
+  readonly aliases: readonly string[];
 }
 
 export interface VehicleSummary {
-  id: string;
-  name: string;
-  nation: string;
-  rank: string;
-  br: number;
-  vehicleType: string;
-  image: string;
+  readonly id: string;
+  readonly name: string;
+  readonly nation: string;
+  readonly rank: string;
+  readonly br: number;
+  readonly vehicleType: string;
+  readonly image: string;
 }
 
 export interface GuessResult {
-  guess: string;
-  isCorrect: boolean;
+  readonly guess: string;
+  readonly isCorrect: boolean;
 }
 
 export interface GameStats {
