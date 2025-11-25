@@ -16,7 +16,7 @@ export const initAudio = () => {
   }
 };
 
-type SoundType = 'wrong' | 'reveal' | 'win' | 'loss' | 'click' | 'start';
+type SoundType = 'wrong' | 'reveal' | 'win' | 'loss' | 'click' | 'start' | 'skip';
 
 export const playSound = async (type: SoundType) => {
   const ctx = getContext();
@@ -106,6 +106,17 @@ export const playSound = async (type: SoundType) => {
       gain.gain.linearRampToValueAtTime(0.001, now + 0.4);
       osc.start(now);
       osc.stop(now + 0.4);
+      break;
+
+    case 'skip':
+      // Quick swoosh sound for skipping
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(400, now);
+      osc.frequency.exponentialRampToValueAtTime(800, now + 0.15);
+      gain.gain.setValueAtTime(0.04, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc.start(now);
+      osc.stop(now + 0.15);
       break;
   }
 };

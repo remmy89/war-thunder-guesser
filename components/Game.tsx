@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { VehicleData, Difficulty, VehicleSummary, GameStats } from '../types';
 import { HintCard } from './HintCard';
-import { Send, AlertTriangle, Search, Shield, Target, ChevronRight, Wifi, Eye, Lock } from 'lucide-react';
+import { Send, AlertTriangle, Search, Shield, Target, ChevronRight, Wifi, Eye, Lock, SkipForward, Keyboard, HelpCircle, Zap, X } from 'lucide-react';
 import { playSound } from '../utils/audio';
 import { GAME_CONFIG, ROMAN_TO_ARABIC } from '../constants';
 import { getGameStats, updateGameStats } from '../utils/storage';
@@ -14,13 +14,38 @@ interface GameProps {
   onGameOver: (won: boolean, attemptsUsed: number) => void;
 }
 
+// Toast notification component
+const Toast: React.FC<{ message: string; type: 'error' | 'info' | 'success'; onClose: () => void }> = ({ message, type, onClose }) => {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 2500);
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  const bgColor = type === 'error' ? 'bg-red-900/90 border-red-600' : type === 'success' ? 'bg-green-900/90 border-green-600' : 'bg-blue-900/90 border-blue-600';
+  const textColor = type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-blue-400';
+
+  return (
+    <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 ${bgColor} border px-4 py-3 rounded-sm shadow-lg animate-toast-in flex items-center gap-3`}>
+      {type === 'error' && <AlertTriangle className="w-4 h-4 text-red-400" />}
+      {type === 'info' && <Zap className="w-4 h-4 text-blue-400" />}
+      {type === 'success' && <Target className="w-4 h-4 text-green-400" />}
+      <span className={`font-mono text-sm ${textColor}`}>{message}</span>
+      <button onClick={onClose} className="ml-2 text-gray-400 hover:text-white">
+        <X className="w-3 h-3" />
+      </button>
+    </div>
+  );
+};
+
 export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOver }) => {
   const [guess, setGuess] = useState('');
   const [attempts, setAttempts] = useState(0);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'error' | 'info' | 'success' } | null>(null);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [stats, setStats] = useState<GameStats>(getGameStats);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -115,9 +140,51 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     return false;
   }, [vehicle.name, vehicle.aliases, convertRoman]);
 
+  // Handle skip hint (reveal next hint without guessing)
+  const handleSkipHint = useCallback(() => {
+    if (attempts >= MAX_ATTEMPTS - 1) {
+      setToast({ message: 'No more hints available!', type: 'info' });
+      return;
+    }
+    
+    playSound('reveal');
+    setAttempts(prev => prev + 1);
+    setToast({ message: `Hint ${attempts + 2} revealed. ${MAX_ATTEMPTS - attempts - 1} attempts remaining.`, type: 'info' });
+  }, [attempts, MAX_ATTEMPTS]);
+
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // Skip hint with Ctrl+S or Cmd+S
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (attempts < MAX_ATTEMPTS - 1) {
+          playSound('reveal');
+          setAttempts(prev => prev + 1);
+          setToast({ message: `Hint revealed. ${MAX_ATTEMPTS - attempts - 1} attempts remaining.`, type: 'info' });
+        }
+      }
+      // Toggle keyboard help with ?
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        setShowKeyboardHelp(prev => !prev);
+      }
+      // Focus input with /
+      if (e.key === '/' && document.activeElement !== inputRef.current) {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [attempts, MAX_ATTEMPTS]);
+
   // Handle guess submission
   const checkGuess = useCallback((valueToCheck: string) => {
-    if (!valueToCheck.trim()) return;
+    if (!valueToCheck.trim()) {
+      setToast({ message: 'Enter a vehicle name first!', type: 'info' });
+      return;
+    }
     setShowSuggestions(false);
 
     const isMatch = checkGuessMatch(valueToCheck);
@@ -136,10 +203,11 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
         onGameOver(false, nextAttempts);
       } else {
         playSound('wrong');
+        setIsShaking(true);
+        setTimeout(() => setIsShaking(false), 500);
         setAttempts(nextAttempts);
         setGuess('');
-        setErrorMsg('Incorrect. Intel updated.');
-        setTimeout(() => setErrorMsg(null), 2000);
+        setToast({ message: `Incorrect! New intel unlocked. ${MAX_ATTEMPTS - nextAttempts} attempts left.`, type: 'error' });
       }
     }
   }, [checkGuessMatch, attempts, MAX_ATTEMPTS, onGameOver]);
@@ -190,6 +258,53 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
 
   return (
     <div className="w-full max-w-2xl mx-auto p-4">
+      {/* Toast Notification */}
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
+
+      {/* Keyboard Shortcuts Help Modal */}
+      {showKeyboardHelp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onClick={() => setShowKeyboardHelp(false)}>
+          <div className="bg-[#1a1a1a] border border-gray-700 p-6 rounded-sm max-w-sm w-full mx-4 animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-mono text-lg font-bold text-wt-orange flex items-center gap-2">
+                <Keyboard className="w-5 h-5" /> Keyboard Shortcuts
+              </h3>
+              <button onClick={() => setShowKeyboardHelp(false)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="space-y-3 text-sm font-mono">
+              <div className="flex justify-between text-gray-400">
+                <span>Submit guess</span>
+                <kbd className="bg-gray-800 px-2 py-1 rounded text-xs">Enter</kbd>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Skip / Reveal hint</span>
+                <kbd className="bg-gray-800 px-2 py-1 rounded text-xs">Ctrl+S</kbd>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Focus search</span>
+                <kbd className="bg-gray-800 px-2 py-1 rounded text-xs">/</kbd>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Navigate suggestions</span>
+                <kbd className="bg-gray-800 px-2 py-1 rounded text-xs">↑ ↓</kbd>
+              </div>
+              <div className="flex justify-between text-gray-400">
+                <span>Close suggestions</span>
+                <kbd className="bg-gray-800 px-2 py-1 rounded text-xs">Esc</kbd>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Status Bar */}
       <div className="flex justify-between items-center mb-6 border-b border-gray-700 pb-4">
         <div className="flex items-center space-x-4">
@@ -199,11 +314,41 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
           </div>
           <div className="hidden md:flex space-x-4 text-xs font-mono text-gray-500 border-l border-gray-700 pl-4">
             <span>GAMES: <span className="text-gray-300">{stats.gamesPlayed}</span></span>
-            <span>STREAK: <span className="text-wt-orange">{stats.currentStreak}</span></span>
+            <span className={stats.currentStreak >= 3 ? 'animate-streak-pop' : ''}>
+              STREAK: <span className={`${stats.currentStreak >= 3 ? 'text-green-500' : 'text-wt-orange'} font-bold`}>
+                {stats.currentStreak}{stats.currentStreak >= 5 && ' 🔥'}
+              </span>
+            </span>
           </div>
         </div>
-        <div className="font-mono text-sm text-gray-400" role="status" aria-live="polite">
-          ATTEMPTS: <span className="text-wt-orange text-xl font-bold">{MAX_ATTEMPTS - attempts}</span>
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowKeyboardHelp(true)}
+            className="text-gray-500 hover:text-wt-orange transition-colors p-1"
+            aria-label="Show keyboard shortcuts"
+            title="Keyboard shortcuts (?)"
+          >
+            <Keyboard className="w-4 h-4" />
+          </button>
+          <div className="font-mono text-sm text-gray-400" role="status" aria-live="polite">
+            ATTEMPTS: <span className={`text-xl font-bold ${MAX_ATTEMPTS - attempts <= 2 ? 'text-red-500' : 'text-wt-orange'}`}>
+              {MAX_ATTEMPTS - attempts}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Progress Bar */}
+      <div className="mb-4">
+        <div className="flex justify-between text-[10px] font-mono text-gray-500 mb-1">
+          <span>INTEL PROGRESS</span>
+          <span>{Math.min(attempts + 1, 5)}/5 HINTS</span>
+        </div>
+        <div className="w-full h-1.5 bg-gray-800 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-wt-orange to-yellow-500 transition-all duration-500 ease-out"
+            style={{ width: `${Math.min(((attempts + 1) / 5) * 100, 100)}%` }}
+          />
         </div>
       </div>
 
@@ -258,7 +403,7 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8" role="list" aria-label="Hint cards">
         <HintCard label="NATION" value={vehicle.nation} isRevealed={true} iconType="nation" index={0} />
         <HintCard label="RANK" value={`RANK ${vehicle.rank}`} isRevealed={attempts >= 1} iconType="rank" index={1} />
         <HintCard label="BATTLE RATING" value={`${vehicle.br.toFixed(1)} (RB)`} isRevealed={attempts >= 2} iconType="br" index={2} />
@@ -268,7 +413,7 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
         </div>
       </div>
 
-      <div className="relative z-20">
+      <div className={`relative z-20 ${isShaking ? 'animate-shake' : ''}`}>
         <div className="absolute -inset-0.5 bg-gradient-to-r from-wt-orange to-red-600 rounded-lg blur opacity-30 transition duration-1000"></div>
         <div className="relative bg-wt-dark rounded-lg p-4 border border-gray-700">
             <label className="block text-xs font-mono text-gray-400 mb-2 uppercase">
@@ -289,7 +434,6 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
                   className="w-full bg-black/50 border border-gray-600 text-wt-text px-4 py-3 pl-10 rounded-sm font-mono focus:outline-none focus:border-wt-orange focus:ring-1 focus:ring-wt-orange transition-all"
                   autoComplete="off"
                   aria-label="Vehicle name guess"
-                  aria-describedby={errorMsg ? "error-message" : undefined}
                 />
                 <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none" aria-hidden="true">
                   {difficulty === Difficulty.HARD ? <Search className="w-4 h-4 text-gray-500" /> : <Search className="w-4 h-4 text-wt-orange" />}
@@ -326,12 +470,30 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
               
               <button
                 onClick={() => checkGuess(guess)}
-                className="bg-wt-orange hover:bg-yellow-600 text-black font-bold px-6 py-3 rounded-sm flex items-center space-x-2 transition-colors shrink-0"
+                className="bg-wt-orange hover:bg-yellow-600 text-black font-bold px-6 py-3 rounded-sm flex items-center space-x-2 transition-colors shrink-0 active:scale-95"
+                aria-label="Submit guess"
               >
-                <span>SEND</span>
+                <span className="hidden sm:inline">SEND</span>
                 <Send className="w-4 h-4" />
               </button>
             </div>
+
+            {/* Skip Hint Button */}
+            {attempts < MAX_ATTEMPTS - 1 && (
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  onClick={handleSkipHint}
+                  className="flex items-center gap-2 text-xs font-mono text-gray-500 hover:text-wt-orange transition-colors group"
+                  title="Reveal next hint (Ctrl+S)"
+                >
+                  <SkipForward className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                  <span>Skip & reveal next hint</span>
+                </button>
+                <span className="text-[10px] font-mono text-gray-600">
+                  Press <kbd className="bg-gray-800 px-1 rounded">?</kbd> for shortcuts
+                </span>
+              </div>
+            )}
 
             {difficulty === Difficulty.EASY && (
               <div className="mt-4 border-t border-gray-700 pt-2">
@@ -373,8 +535,8 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
                     </div>
                   )}
                   {filteredPool.length > POOL_DISPLAY_LIMIT && (
-                    <div className="text-center text-[10px] text-gray-600 py-1">
-                      ... {filteredPool.length - POOL_DISPLAY_LIMIT} more matches ...
+                    <div className="text-center text-[10px] text-gray-600 py-2 border-t border-gray-800">
+                      Showing top {POOL_DISPLAY_LIMIT} of {filteredPool.length} matches. Type to narrow results.
                     </div>
                   )}
                 </div>
@@ -382,16 +544,6 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
             )}
         </div>
       </div>
-      {errorMsg && (
-        <div 
-          id="error-message"
-          role="alert"
-          className="mt-4 p-3 bg-red-900/30 border border-red-600/50 text-red-400 rounded-sm flex items-center justify-center animate-bounce"
-        >
-          <AlertTriangle className="w-4 h-4 mr-2" aria-hidden="true" />
-          <span className="font-mono text-sm">{errorMsg}</span>
-        </div>
-      )}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {
           width: 4px;

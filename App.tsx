@@ -1,10 +1,10 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { GameState, VehicleData, Difficulty, VehicleSummary, Achievement } from './types';
 import { fetchMysteryVehicle } from './services/apiService';
 import { Game } from './components/Game';
 import { ServiceRecord } from './components/ServiceRecord';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { Radar, Trophy, AlertOctagon, Play, ShieldAlert, RefreshCw, Crosshair, Skull, Calendar, Medal } from 'lucide-react';
+import { Radar, Trophy, AlertOctagon, Play, ShieldAlert, RefreshCw, Crosshair, Skull, Calendar, Medal, HelpCircle, Info, Share2, Copy, Check, Sparkles } from 'lucide-react';
 import { initAudio, playSound } from './utils/audio';
 import { processGameResult } from './utils/achievements';
 import { getGameStats } from './utils/storage';
@@ -17,6 +17,17 @@ export default function App() {
   const [loadingError, setLoadingError] = useState<string | null>(null);
   const [showServiceRecord, setShowServiceRecord] = useState(false);
   const [newAchievements, setNewAchievements] = useState<Achievement[]>([]);
+  const [attemptsUsed, setAttemptsUsed] = useState(0);
+  const [copied, setCopied] = useState(false);
+  const [showDifficultyInfo, setShowDifficultyInfo] = useState<'easy' | 'hard' | 'daily' | null>(null);
+
+  // Confetti effect for wins
+  const [showConfetti, setShowConfetti] = useState(false);
+  
+  const createConfetti = useCallback(() => {
+    setShowConfetti(true);
+    setTimeout(() => setShowConfetti(false), 3000);
+  }, []);
 
   const startGame = useCallback(async (selectedDifficulty: Difficulty, seed?: string) => {
     initAudio();
@@ -40,6 +51,11 @@ export default function App() {
 
   const handleGameOver = useCallback((won: boolean, attempts: number) => {
     setGameState(won ? GameState.VICTORY : GameState.GAME_OVER);
+    setAttemptsUsed(attempts);
+
+    if (won) {
+      createConfetti();
+    }
 
     if (vehicle) {
       const stats = getGameStats();
@@ -50,7 +66,28 @@ export default function App() {
         setTimeout(() => playSound('win'), 500);
       }
     }
-  }, [vehicle]);
+  }, [vehicle, createConfetti]);
+
+  // Share result functionality
+  const handleShare = useCallback(() => {
+    if (!vehicle) return;
+    
+    const stats = getGameStats();
+    const result = gameState === GameState.VICTORY 
+      ? `🎯 Identified: ${vehicle.name}\n⚡ Attempts: ${attemptsUsed + 1}/6`
+      : `❌ Failed to identify\n🎯 It was: ${vehicle.name}`;
+    
+    const shareText = `🔍 WT Guesser\n${result}\n🔥 Streak: ${stats.currentStreak}\n\nPlay at: ${window.location.href}`;
+    
+    if (navigator.share) {
+      navigator.share({ text: shareText }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(shareText).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    }
+  }, [vehicle, gameState, attemptsUsed]);
 
   const handleReturnToMenu = useCallback(() => {
     playSound('click');
@@ -131,53 +168,101 @@ export default function App() {
 
               <div className="flex flex-col gap-4 justify-center">
                 <div className="flex flex-col sm:flex-row gap-4 justify-center w-full">
-                  <button
-                    onClick={() => startGame(Difficulty.EASY)}
-                    className="group relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-gray-800 border border-gray-700 hover:border-green-500 hover:bg-gray-750 rounded-sm w-full sm:w-auto"
-                  >
-                    <div className="flex flex-col items-center">
-                      <div className="flex items-center mb-1">
-                        <Crosshair className="w-4 h-4 mr-2 text-green-500" aria-hidden="true" />
-                        <span className="text-lg tracking-wider">EASY</span>
+                  {/* Easy Mode */}
+                  <div className="relative group">
+                    <button
+                      onClick={() => startGame(Difficulty.EASY)}
+                      onMouseEnter={() => setShowDifficultyInfo('easy')}
+                      onMouseLeave={() => setShowDifficultyInfo(null)}
+                      className="relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-gray-800 border border-gray-700 hover:border-green-500 hover:bg-gray-750 rounded-sm w-full sm:w-auto group"
+                    >
+                      <div className="flex flex-col items-center">
+                        <div className="flex items-center mb-1">
+                          <Crosshair className="w-4 h-4 mr-2 text-green-500" aria-hidden="true" />
+                          <span className="text-lg tracking-wider">EASY</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 uppercase tracking-widest font-mono group-hover:text-gray-400">
+                          Assisted Mode
+                        </span>
                       </div>
-                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-mono group-hover:text-gray-400">
-                        Assisted Mode
-                      </span>
-                    </div>
-                  </button>
+                      <HelpCircle className="absolute top-2 right-2 w-3 h-3 text-gray-600 group-hover:text-green-500" />
+                    </button>
+                    {showDifficultyInfo === 'easy' && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-3 bg-[#1a1a1a] border border-gray-700 rounded-sm text-xs text-left w-64 z-50 animate-fade-in shadow-xl">
+                        <div className="font-bold text-green-500 mb-1">Easy Mode</div>
+                        <ul className="text-gray-400 space-y-1">
+                          <li>• Filtered vehicle list based on hints</li>
+                          <li>• Click to select from matching vehicles</li>
+                          <li>• Great for learning vehicle names</li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
 
-                  <button
-                    onClick={() => startGame(Difficulty.HARD)}
-                    className="group relative flex items-center justify-center px-6 py-4 font-bold text-black transition-all duration-200 bg-wt-orange hover:bg-white rounded-sm w-full sm:w-auto"
-                  >
-                    <div className="flex flex-col items-center">
-                      <div className="flex items-center mb-1">
-                        <Skull className="w-4 h-4 mr-2" aria-hidden="true" />
-                        <span className="text-lg tracking-wider">HARD</span>
+                  {/* Hard Mode */}
+                  <div className="relative group">
+                    <button
+                      onClick={() => startGame(Difficulty.HARD)}
+                      onMouseEnter={() => setShowDifficultyInfo('hard')}
+                      onMouseLeave={() => setShowDifficultyInfo(null)}
+                      className="relative flex items-center justify-center px-6 py-4 font-bold text-black transition-all duration-200 bg-wt-orange hover:bg-white rounded-sm w-full sm:w-auto group"
+                    >
+                      <div className="flex flex-col items-center">
+                        <div className="flex items-center mb-1">
+                          <Skull className="w-4 h-4 mr-2" aria-hidden="true" />
+                          <span className="text-lg tracking-wider">HARD</span>
+                        </div>
+                        <span className="text-[10px] text-black/60 uppercase tracking-widest font-mono">
+                          Manual Entry
+                        </span>
                       </div>
-                      <span className="text-[10px] text-black/60 uppercase tracking-widest font-mono">
-                        Manual Entry
-                      </span>
-                    </div>
-                  </button>
+                      <HelpCircle className="absolute top-2 right-2 w-3 h-3 text-black/40 group-hover:text-black/70" />
+                    </button>
+                    {showDifficultyInfo === 'hard' && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-3 bg-[#1a1a1a] border border-gray-700 rounded-sm text-xs text-left w-64 z-50 animate-fade-in shadow-xl">
+                        <div className="font-bold text-wt-orange mb-1">Hard Mode</div>
+                        <ul className="text-gray-400 space-y-1">
+                          <li>• Type vehicle name manually</li>
+                          <li>• Autocomplete suggestions available</li>
+                          <li>• Tests your War Thunder knowledge</li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
 
-                  <button
-                    onClick={() => {
-                      const today = new Date().toISOString().split('T')[0];
-                      startGame(Difficulty.HARD, today);
-                    }}
-                    className="group relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-blue-600 hover:bg-blue-500 border border-blue-400 rounded-sm w-full sm:w-auto"
-                  >
-                    <div className="flex flex-col items-center">
-                      <div className="flex items-center mb-1">
-                        <Calendar className="w-4 h-4 mr-2" aria-hidden="true" />
-                        <span className="text-lg tracking-wider">DAILY</span>
+                  {/* Daily Challenge */}
+                  <div className="relative group">
+                    <button
+                      onClick={() => {
+                        const today = new Date().toISOString().split('T')[0];
+                        startGame(Difficulty.HARD, today);
+                      }}
+                      onMouseEnter={() => setShowDifficultyInfo('daily')}
+                      onMouseLeave={() => setShowDifficultyInfo(null)}
+                      className="relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-blue-600 hover:bg-blue-500 border border-blue-400 rounded-sm w-full sm:w-auto group"
+                    >
+                      <div className="flex flex-col items-center">
+                        <div className="flex items-center mb-1">
+                          <Calendar className="w-4 h-4 mr-2" aria-hidden="true" />
+                          <span className="text-lg tracking-wider">DAILY</span>
+                        </div>
+                        <span className="text-[10px] text-blue-200 uppercase tracking-widest font-mono">
+                          Global Target
+                        </span>
                       </div>
-                      <span className="text-[10px] text-blue-200 uppercase tracking-widest font-mono">
-                        Global Target
-                      </span>
-                    </div>
-                  </button>
+                      <Sparkles className="absolute top-2 right-2 w-3 h-3 text-blue-300 animate-pulse" />
+                    </button>
+                    {showDifficultyInfo === 'daily' && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-3 bg-[#1a1a1a] border border-gray-700 rounded-sm text-xs text-left w-64 z-50 animate-fade-in shadow-xl">
+                        <div className="font-bold text-blue-400 mb-1">Daily Challenge</div>
+                        <ul className="text-gray-400 space-y-1">
+                          <li>• Same vehicle for everyone today</li>
+                          <li>• Compare with friends</li>
+                          <li>• New target every 24 hours</li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Service Record Button */}
@@ -188,6 +273,30 @@ export default function App() {
                   <Medal className="w-4 h-4 mr-2" aria-hidden="true" />
                   VIEW SERVICE RECORD
                 </button>
+
+                {/* Quick Stats */}
+                {(() => {
+                  const stats = getGameStats();
+                  if (stats.gamesPlayed > 0) {
+                    return (
+                      <div className="mt-4 pt-4 border-t border-gray-800 flex justify-center gap-8 text-xs font-mono text-gray-500">
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-gray-300">{stats.gamesPlayed}</div>
+                          <div>Games</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-green-500">{Math.round((stats.wins / stats.gamesPlayed) * 100)}%</div>
+                          <div>Win Rate</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xl font-bold text-wt-orange">{stats.maxStreak}</div>
+                          <div>Best Streak</div>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             </div>
           )}
@@ -254,10 +363,28 @@ export default function App() {
           )}
 
           {(gameState === GameState.VICTORY || gameState === GameState.GAME_OVER) && vehicle && (
-            <div className="w-full max-w-2xl bg-[#1a1a1a] border border-gray-700 p-8 rounded-sm shadow-2xl text-center animate-in slide-in-from-bottom-10 duration-500">
+            <div className="w-full max-w-2xl bg-[#1a1a1a] border border-gray-700 p-8 rounded-sm shadow-2xl text-center animate-in slide-in-from-bottom-10 duration-500 relative overflow-hidden">
+              {/* Confetti effect */}
+              {showConfetti && (
+                <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+                  {Array.from({ length: 50 }).map((_, i) => (
+                    <div
+                      key={i}
+                      className="confetti"
+                      style={{
+                        left: `${Math.random() * 100}%`,
+                        backgroundColor: ['#e6a33e', '#22c55e', '#3b82f6', '#ef4444', '#a855f7'][Math.floor(Math.random() * 5)],
+                        animationDelay: `${Math.random() * 2}s`,
+                        transform: `rotate(${Math.random() * 360}deg)`,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
               <div className="mb-6">
                 {gameState === GameState.VICTORY ? (
-                  <div className="inline-block p-4 rounded-full bg-green-500/20 mb-4" aria-hidden="true">
+                  <div className="inline-block p-4 rounded-full bg-green-500/20 mb-4 animate-pulse-glow" aria-hidden="true">
                     <Trophy className="w-16 h-16 text-green-500" />
                   </div>
                 ) : (
@@ -270,8 +397,20 @@ export default function App() {
                   {gameState === GameState.VICTORY ? 'TARGET IDENTIFIED' : 'MISSION FAILED'}
                 </h2>
                 <p className="text-gray-400 font-mono uppercase tracking-widest">
-                  {gameState === GameState.VICTORY ? 'Superior Intel confirmed.' : 'Vehicle escaped identification.'}
+                  {gameState === GameState.VICTORY 
+                    ? `Identified in ${attemptsUsed + 1} attempt${attemptsUsed === 0 ? '' : 's'}!` 
+                    : 'Vehicle escaped identification.'}
                 </p>
+                
+                {/* Performance badge */}
+                {gameState === GameState.VICTORY && (
+                  <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono bg-gradient-to-r from-wt-orange/20 to-transparent border border-wt-orange/30">
+                    {attemptsUsed === 0 && <span className="text-yellow-400">🏆 PERFECT - First Try!</span>}
+                    {attemptsUsed === 1 && <span className="text-green-400">⚡ Excellent - 2 Attempts</span>}
+                    {attemptsUsed >= 2 && attemptsUsed <= 3 && <span className="text-blue-400">✓ Good Work</span>}
+                    {attemptsUsed >= 4 && <span className="text-gray-400">Close Call!</span>}
+                  </div>
+                )}
               </div>
 
               {/* Achievement Unlock Notification */}
@@ -332,13 +471,32 @@ export default function App() {
                 </div>
               </div>
 
-              <button
-                onClick={handleReturnToMenu}
-                className="bg-white hover:bg-gray-200 text-black font-bold py-3 px-8 rounded-sm flex items-center justify-center mx-auto space-x-2 transition-colors"
-              >
-                <RefreshCw className="w-5 h-5" aria-hidden="true" />
-                <span>NEXT MISSION</span>
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={handleReturnToMenu}
+                  className="bg-white hover:bg-gray-200 text-black font-bold py-3 px-8 rounded-sm flex items-center justify-center space-x-2 transition-colors"
+                >
+                  <RefreshCw className="w-5 h-5" aria-hidden="true" />
+                  <span>NEXT MISSION</span>
+                </button>
+                
+                <button
+                  onClick={handleShare}
+                  className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-6 rounded-sm flex items-center justify-center space-x-2 transition-colors"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="w-5 h-5 text-green-500" aria-hidden="true" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="w-5 h-5" aria-hidden="true" />
+                      <span>Share Result</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
         </main>

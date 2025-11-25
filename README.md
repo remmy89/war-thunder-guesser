@@ -5,7 +5,7 @@
 A tactical vehicle identification game built with React, TypeScript, and Vite. Test your knowledge of War Thunder ground vehicles by identifying tanks based on progressively revealed intelligence data.
 
 ![Status](https://img.shields.io/badge/Status-Operational-green)
-![Version](https://img.shields.io/badge/Version-1.2.0-blue)
+![Version](https://img.shields.io/badge/Version-1.3.0-blue)
 ![Tech](https://img.shields.io/badge/Built%20With-React%2019%20%2B%20Tailwind-blue)
 ![License](https://img.shields.io/badge/License-MIT-orange)
 
@@ -25,13 +25,33 @@ War Thunder Guesser mimics a military intelligence terminal. Your goal is to ide
     *   **Fuzzy Matching:** The system uses a Levenshtein distance algorithm to accept typos, aliases, and common abbreviations (e.g., "Marder 1A3" works for "Marder 1 A3").
     *   **No Handholding:** No dropdowns. Pure knowledge required.
 
+3.  **DAILY CHALLENGE**
+    *   **Global Target:** Same vehicle for everyone each day.
+    *   **Compare with Friends:** Share your results and compete.
+    *   **New Target Every 24 Hours:** Fresh challenge daily.
+
 ## ✨ Key Features
 
 - **Progressive Hint System:** Nation → Rank → BR → Class → Armament → Visuals (revealed across attempts)
-- **Achievements & Service Record:** New system to track medals and progress (Sharpshooter, Iron Cross, Cold War Specialist, Veteran, Tank Ace). Open `Menu → VIEW SERVICE RECORD` to view medals and progress; achievements persist in `localStorage`.
-- **Immersive UI:** "Dark Military OS" aesthetic with scanlines, CRT effects, and tactical animations.
-- **Audio Feedback:** Built-in Web Audio synthesizer for UI sounds (no external audio files required).
-- **Live Data:** Fetches vehicle data dynamically from a custom War Thunder API.
+- **Skip Hint Feature:** Reveal the next hint without submitting a wrong guess (strategic gameplay)
+- **Keyboard Shortcuts:** Full keyboard navigation support (`Ctrl+S` to skip, `/` to focus search, `?` for help)
+- **Toast Notifications:** Modern feedback system for game events
+- **Share Results:** Share your performance with friends after each game
+- **Achievements & Service Record:** Track medals and progress (Sharpshooter, Iron Cross, Cold War Specialist, Veteran, Tank Ace)
+- **Immersive UI:** "Dark Military OS" aesthetic with scanlines, CRT effects, and tactical animations
+- **Audio Feedback:** Built-in Web Audio synthesizer for UI sounds (no external audio files required)
+- **Live Data:** Fetches vehicle data dynamically from a custom War Thunder API
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Enter` | Submit guess |
+| `Ctrl+S` / `Cmd+S` | Skip & reveal next hint |
+| `/` | Focus search input |
+| `?` | Toggle keyboard shortcuts help |
+| `↑` / `↓` | Navigate suggestions |
+| `Esc` | Close suggestions |
 
 ## 🛠️ Tech Stack
 
@@ -88,7 +108,38 @@ war-thunder-guesser/
 └── vite-env.d.ts         # Vite TypeScript type definitions
 ```
 
-## 📝 What's New (v1.2.0)
+## 📝 What's New (v1.3.0)
+
+### Enhanced User Experience
+- **Skip Hint Feature:** New button to reveal hints without wrong guesses for strategic gameplay
+- **Toast Notifications:** Replaced bouncing error messages with modern toast system (error/info/success)
+- **Progress Bar:** Visual intel progress indicator showing hint progression (1-5)
+- **Keyboard Shortcuts:** Full keyboard navigation (`Ctrl+S` skip, `/` focus, `?` help modal)
+- **Share Results:** Share button on victory/game over screen (native share or clipboard)
+
+### Visual Improvements
+- **Hint Card Animations:** Flip animation with sparkle effect when hints are revealed
+- **Shake Animation:** Input shakes on wrong answers for clear feedback
+- **Streak Celebration:** High streaks (3+) animate, 5+ shows fire emoji 🔥
+- **Confetti Effect:** Celebration animation on victory
+- **Performance Badges:** Shows "PERFECT", "Excellent", "Good Work" based on attempts
+- **Low Attempt Warning:** Counter turns red when ≤2 attempts remain
+
+### Menu Improvements
+- **Difficulty Tooltips:** Hover over buttons to see mode explanations
+- **Quick Stats:** Shows games played, win rate, and best streak on menu
+- **Daily Challenge Indicator:** Sparkle animation on Daily button
+
+### Accessibility
+- Better focus-visible styles with orange outline
+- ARIA labels on all interactive elements
+- Keyboard navigation support throughout
+- Screen reader friendly role attributes
+
+### Audio
+- Added new "skip" sound effect for hint skipping
+
+## 📝 Previous Updates (v1.2.0)
 
 ### Code Quality & Architecture
 - **Centralized Constants**: Extracted all magic numbers and configuration into `constants.ts`
@@ -105,11 +156,6 @@ war-thunder-guesser/
 - Added ARIA attributes (`role`, `aria-label`, `aria-live`, `aria-hidden`)
 - Improved keyboard navigation support
 - Added proper semantic HTML structure
-
-### Developer Experience
-- Proper TypeScript interfaces for API responses
-- JSDoc comments for utility functions
-- Clean code separation following single responsibility principle
 
 ## 📝 Previous Updates (v1.1.0)
 
