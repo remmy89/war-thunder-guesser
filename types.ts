@@ -37,6 +37,16 @@ export interface GuessResult {
   readonly isCorrect: boolean;
 }
 
+export type FeedbackIndicator = 'correct' | 'higher' | 'lower' | 'wrong';
+
+export interface GuessFeedback {
+  readonly vehicleName: string;
+  readonly nation: { guessed: string; correct: boolean };
+  readonly rank: { guessed: string; indicator: FeedbackIndicator };
+  readonly br: { guessed: number; indicator: FeedbackIndicator };
+  readonly vehicleType: { guessed: string; correct: boolean };
+}
+
 export interface GameStats {
   gamesPlayed: number;
   wins: number;

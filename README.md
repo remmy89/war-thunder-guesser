@@ -5,7 +5,7 @@
 A tactical vehicle identification game built with React, TypeScript, and Vite. Test your knowledge of War Thunder ground vehicles by identifying tanks based on progressively revealed intelligence data.
 
 ![Status](https://img.shields.io/badge/Status-Operational-green)
-![Version](https://img.shields.io/badge/Version-1.3.0-blue)
+![Version](https://img.shields.io/badge/Version-1.4.0-blue)
 ![Tech](https://img.shields.io/badge/Built%20With-React%2019%20%2B%20Tailwind-blue)
 ![License](https://img.shields.io/badge/License-MIT-orange)
 
@@ -108,7 +108,27 @@ war-thunder-guesser/
 └── vite-env.d.ts         # Vite TypeScript type definitions
 ```
 
-## 📝 What's New (v1.3.0)
+## 📝 What's New (v1.4.0)
+
+### Wordle-Style Comparative Feedback (Hard Mode)
+- **Smart Guess Analysis:** When you guess incorrectly in Hard Mode, you now see feedback comparing your guess to the target:
+  - **Nation:** ✅ (correct) or ❌ (wrong)
+  - **Rank:** ✅ (match), 🔼 (target is higher), or 🔽 (target is lower)
+  - **BR:** ✅ (match), 🔼 (target is higher), or 🔽 (target is lower)
+  - **Vehicle Type:** ✅ (correct) or ❌ (wrong)
+- **Guess History:** All previous guesses are displayed with their feedback, helping you narrow down the target mathematically
+- **Educational Gameplay:** Learn *why* your guess was wrong, not just that it was wrong
+
+### Layout Improvements
+- **Compact Hint Cards:** Redesigned hint cards in a horizontal 5-column layout to reduce vertical scrolling
+- **Streamlined Feedback Section:** Guess history is now compact and scrollable with a max height
+- **Better Space Utilization:** All game elements now fit better on a single screen
+
+### New Components
+- **GuessFeedback Component:** New dedicated component for displaying comparative feedback
+- **Compact HintCard Mode:** HintCard now supports a `compact` prop for condensed display
+
+## 📝 Previous Updates (v1.3.0)
 
 ### Enhanced User Experience
 - **Skip Hint Feature:** New button to reveal hints without wrong guesses for strategic gameplay

@@ -7,21 +7,22 @@ interface HintCardProps {
   isRevealed: boolean;
   iconType: 'nation' | 'rank' | 'br' | 'type' | 'gun' | 'desc';
   index: number;
+  compact?: boolean;
 }
 
-const getIcon = (type: string) => {
+const getIcon = (type: string, size: string = "w-5 h-5") => {
   switch (type) {
-    case 'nation': return <Map className="w-5 h-5" />;
-    case 'rank': return <Shield className="w-5 h-5" />;
-    case 'br': return <Target className="w-5 h-5" />;
-    case 'type': return <Database className="w-5 h-5" />;
-    case 'gun': return <Crosshair className="w-5 h-5" />;
-    case 'desc': return <Eye className="w-5 h-5" />;
-    default: return <Lock className="w-5 h-5" />;
+    case 'nation': return <Map className={size} />;
+    case 'rank': return <Shield className={size} />;
+    case 'br': return <Target className={size} />;
+    case 'type': return <Database className={size} />;
+    case 'gun': return <Crosshair className={size} />;
+    case 'desc': return <Eye className={size} />;
+    default: return <Lock className={size} />;
   }
 };
 
-export const HintCard: React.FC<HintCardProps> = ({ label, value, isRevealed, iconType, index }) => {
+export const HintCard: React.FC<HintCardProps> = ({ label, value, isRevealed, iconType, index, compact = false }) => {
   const isImage = typeof value === 'string' && value.startsWith('http');
   const [justRevealed, setJustRevealed] = useState(false);
   const prevRevealedRef = useRef(isRevealed);
@@ -35,6 +36,36 @@ export const HintCard: React.FC<HintCardProps> = ({ label, value, isRevealed, ic
     }
     prevRevealedRef.current = isRevealed;
   }, [isRevealed]);
+
+  // Compact mode for horizontal layout
+  if (compact) {
+    return (
+      <div 
+        className={`
+          relative overflow-hidden border transition-all duration-300
+          ${justRevealed ? 'animate-hint-reveal' : ''}
+          ${isRevealed 
+            ? 'bg-wt-panel border-wt-orange/50' 
+            : 'bg-[#151515] border-gray-800 opacity-50'}
+          px-2 py-1.5 rounded-sm
+        `}
+        role="listitem"
+        aria-label={`${label}: ${isRevealed ? value : 'Classified'}`}
+      >
+        <div className="flex items-center gap-1.5">
+          <div className={`shrink-0 ${isRevealed ? 'text-wt-orange' : 'text-gray-600'}`}>
+            {isRevealed ? getIcon(iconType, "w-3 h-3") : <Lock className="w-3 h-3" />}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] font-mono text-gray-500 uppercase">{label}</p>
+            <p className={`font-mono text-xs font-bold truncate ${isRevealed ? 'text-wt-text' : 'text-gray-700'}`}>
+              {isRevealed ? value : '???'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 

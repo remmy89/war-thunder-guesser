@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { VehicleData, Difficulty, VehicleSummary, GameStats } from '../types';
+import { VehicleData, Difficulty, VehicleSummary, GameStats, GuessFeedback as GuessFeedbackType, FeedbackIndicator } from '../types';
 import { HintCard } from './HintCard';
+import { GuessFeedback } from './GuessFeedback';
 import { Send, AlertTriangle, Search, Shield, Target, ChevronRight, Wifi, Eye, Lock, SkipForward, Keyboard, HelpCircle, Zap, X } from 'lucide-react';
 import { playSound } from '../utils/audio';
-import { GAME_CONFIG, ROMAN_TO_ARABIC } from '../constants';
+import { GAME_CONFIG, ROMAN_TO_ARABIC, ROMAN_MAP } from '../constants';
 import { getGameStats, updateGameStats } from '../utils/storage';
 import { normalize, tokenize, isFuzzyMatch, isTokenMatch } from '../utils/stringUtils';
 
@@ -46,6 +47,7 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
   const [stats, setStats] = useState<GameStats>(getGameStats);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
+  const [guessFeedbackHistory, setGuessFeedbackHistory] = useState<GuessFeedbackType[]>([]);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
@@ -54,6 +56,54 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
   const currentBlur = Math.max(0, MAX_BLUR - (attempts * BLUR_STEP));
   const isImageAvailable = vehicle.description?.startsWith('http') ?? false;
   const convertRoman = difficulty === Difficulty.HARD;
+
+  // Convert Roman numeral rank to number for comparison
+  const rankToNumber = useCallback((rank: string): number => {
+    const cleanRank = rank.replace(/^RANK\s*/i, '').trim().toLowerCase();
+    return parseInt(ROMAN_TO_ARABIC[cleanRank] ?? cleanRank, 10) || 0;
+  }, []);
+
+  // Generate feedback for an incorrect guess
+  const generateFeedback = useCallback((guessedVehicle: VehicleSummary): GuessFeedbackType => {
+    const targetRankNum = rankToNumber(vehicle.rank);
+    const guessedRankNum = rankToNumber(guessedVehicle.rank);
+    
+    let rankIndicator: FeedbackIndicator = 'correct';
+    if (guessedRankNum < targetRankNum) {
+      rankIndicator = 'higher';
+    } else if (guessedRankNum > targetRankNum) {
+      rankIndicator = 'lower';
+    }
+
+    let brIndicator: FeedbackIndicator = 'correct';
+    if (Math.abs(guessedVehicle.br - vehicle.br) < 0.05) {
+      brIndicator = 'correct';
+    } else if (guessedVehicle.br < vehicle.br) {
+      brIndicator = 'higher';
+    } else {
+      brIndicator = 'lower';
+    }
+
+    return {
+      vehicleName: guessedVehicle.name,
+      nation: {
+        guessed: guessedVehicle.nation,
+        correct: guessedVehicle.nation.toLowerCase() === vehicle.nation.toLowerCase(),
+      },
+      rank: {
+        guessed: guessedVehicle.rank,
+        indicator: rankIndicator,
+      },
+      br: {
+        guessed: guessedVehicle.br,
+        indicator: brIndicator,
+      },
+      vehicleType: {
+        guessed: guessedVehicle.vehicleType,
+        correct: guessedVehicle.vehicleType.toLowerCase() === vehicle.vehicleType.toLowerCase(),
+      },
+    };
+  }, [vehicle, rankToNumber]);
 
   // Focus input on mount and after attempts
   useEffect(() => {
@@ -196,6 +246,18 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
       onGameOver(true, attempts);
     } else {
       const nextAttempts = attempts + 1;
+      
+      // Generate feedback for Hard Mode
+      if (difficulty === Difficulty.HARD) {
+        const guessedVehicle = pool.find(
+          (v) => v.name.toLowerCase() === valueToCheck.toLowerCase()
+        );
+        if (guessedVehicle) {
+          const feedback = generateFeedback(guessedVehicle);
+          setGuessFeedbackHistory((prev) => [...prev, feedback]);
+        }
+      }
+      
       if (nextAttempts >= MAX_ATTEMPTS) {
         playSound('loss');
         const newStats = updateGameStats(false);
@@ -210,7 +272,7 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
         setToast({ message: `Incorrect! New intel unlocked. ${MAX_ATTEMPTS - nextAttempts} attempts left.`, type: 'error' });
       }
     }
-  }, [checkGuessMatch, attempts, MAX_ATTEMPTS, onGameOver]);
+  }, [checkGuessMatch, attempts, MAX_ATTEMPTS, onGameOver, difficulty, pool, generateFeedback]);
 
   // Handle suggestion selection
   const selectSuggestion = useCallback((suggestion: string) => {
@@ -403,15 +465,33 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8" role="list" aria-label="Hint cards">
-        <HintCard label="NATION" value={vehicle.nation} isRevealed={true} iconType="nation" index={0} />
-        <HintCard label="RANK" value={`RANK ${vehicle.rank}`} isRevealed={attempts >= 1} iconType="rank" index={1} />
-        <HintCard label="BATTLE RATING" value={`${vehicle.br.toFixed(1)} (RB)`} isRevealed={attempts >= 2} iconType="br" index={2} />
-        <HintCard label="CLASS" value={vehicle.vehicleType} isRevealed={attempts >= 3} iconType="type" index={3} />
-        <div className="md:col-span-2">
-          <HintCard label="MAIN ARMAMENT" value={vehicle.armament} isRevealed={attempts >= 4} iconType="gun" index={4} />
-        </div>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4" role="list" aria-label="Hint cards">
+        <HintCard label="NATION" value={vehicle.nation} isRevealed={true} iconType="nation" index={0} compact />
+        <HintCard label="RANK" value={vehicle.rank} isRevealed={attempts >= 1} iconType="rank" index={1} compact />
+        <HintCard label="BR" value={`${vehicle.br.toFixed(1)}`} isRevealed={attempts >= 2} iconType="br" index={2} compact />
+        <HintCard label="CLASS" value={vehicle.vehicleType} isRevealed={attempts >= 3} iconType="type" index={3} compact />
+        <HintCard label="ARMAMENT" value={vehicle.armament} isRevealed={attempts >= 4} iconType="gun" index={4} compact />
       </div>
+
+      {/* Guess Feedback History (Hard Mode only) */}
+      {difficulty === Difficulty.HARD && guessFeedbackHistory.length > 0 && (
+        <div className="mb-4 bg-[#0d0d0d] border border-gray-800 rounded-sm p-2">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="font-mono text-[10px] text-gray-500 uppercase flex items-center gap-1">
+              <Target className="w-2.5 h-2.5 text-wt-orange" /> Guesses
+              <span className="text-gray-600 ml-1">(Nation|Rank|BR|Type)</span>
+            </span>
+            <span className="text-[9px] font-mono text-gray-600">
+              ✅=Match 🔼=Higher 🔽=Lower ❌=Wrong
+            </span>
+          </div>
+          <div className="space-y-1 max-h-24 overflow-y-auto custom-scrollbar">
+            {guessFeedbackHistory.map((feedback, idx) => (
+              <GuessFeedback key={idx} feedback={feedback} index={idx} />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className={`relative z-20 ${isShaking ? 'animate-shake' : ''}`}>
         <div className="absolute -inset-0.5 bg-gradient-to-r from-wt-orange to-red-600 rounded-lg blur opacity-30 transition duration-1000"></div>

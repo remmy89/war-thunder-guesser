@@ -503,7 +503,7 @@ export default function App() {
 
         {/* Footer */}
         <footer className="relative z-10 text-center py-6 text-xs text-gray-600 font-mono">
-          <p>WT-GUESSER v1.2.0 // UNOFFICIAL WAR THUNDER API</p>
+          <p>WT-GUESSER v1.4.0 // UNOFFICIAL WAR THUNDER API</p>
         </footer>
 
         {/* Service Record Modal */}

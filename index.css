@@ -91,6 +91,16 @@ body {
   animation: toast-out 0.3s ease-in forwards;
 }
 
+/* Slide in from left for guess feedback */
+@keyframes slide-in-left {
+  from { transform: translateX(-20px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.3s ease-out both;
+}
+
 /* Progress bar shimmer */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
