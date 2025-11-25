@@ -14,13 +14,6 @@ export const STORAGE_KEYS = {
   ACHIEVEMENTS: 'wt_guesser_achievements',
 } as const;
 
-// API configuration
-export const API_CONFIG = {
-  PAGE_SIZE: 200,
-  MAX_NATION_PAGES: 15,
-  BASE_URL_DEV: '/api',
-  BASE_URL_PROD: 'https://www.wtvehiclesapi.sgambe.serv00.net/api',
-} as const;
 
 // Supported nations
 export const API_NATIONS = [

@@ -57,6 +57,18 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
   const isImageAvailable = vehicle.description?.startsWith('http') ?? false;
   const convertRoman = difficulty === Difficulty.HARD;
 
+  // Normalize string for flexible search (spaces, hyphens, underscores treated as same)
+  const normalizeForSearch = useCallback((str: string): string => {
+    return str.toLowerCase().replace(/[-_\s]+/g, ' ').trim();
+  }, []);
+
+  // Check if vehicle name matches search query (flexible matching)
+  const matchesSearch = useCallback((vehicleName: string, searchQuery: string): boolean => {
+    const normalizedName = normalizeForSearch(vehicleName);
+    const normalizedSearch = normalizeForSearch(searchQuery);
+    return normalizedName.includes(normalizedSearch);
+  }, [normalizeForSearch]);
+
   // Convert Roman numeral rank to number for comparison
   const rankToNumber = useCallback((rank: string): number => {
     const cleanRank = rank.replace(/^RANK\s*/i, '').trim().toLowerCase();
@@ -134,26 +146,34 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
     if (attempts >= 3) result = result.filter((v) => v.vehicleType === vehicle.vehicleType);
 
     if (guess.trim()) {
-      const search = guess.toLowerCase();
-      result = result.filter((v) => v.name.toLowerCase().includes(search));
+      result = result.filter((v) => matchesSearch(v.name, guess));
     }
     
     return result.sort((a, b) => a.name.localeCompare(b.name));
-  }, [pool, difficulty, vehicle.nation, vehicle.rank, vehicle.vehicleType, attempts, guess]);
+  }, [pool, difficulty, vehicle.nation, vehicle.rank, vehicle.vehicleType, attempts, guess, matchesSearch]);
 
   // Suggestions for Hard mode autocomplete
   const suggestions = useMemo(() => {
     if (difficulty !== Difficulty.HARD || !guess.trim()) return [];
 
-    const search = guess.toLowerCase();
+    const normalizedSearch = normalizeForSearch(guess);
 
-    return pool
-      .filter((v) => v.name.toLowerCase().includes(search))
+    // Deduplicate by name first
+    const seenNames = new Set<string>();
+    const uniquePool = pool.filter((v) => {
+      const lowerName = v.name.toLowerCase();
+      if (seenNames.has(lowerName)) return false;
+      seenNames.add(lowerName);
+      return true;
+    });
+
+    return uniquePool
+      .filter((v) => matchesSearch(v.name, guess))
       .sort((a, b) => {
-        const aName = a.name.toLowerCase();
-        const bName = b.name.toLowerCase();
-        const aStarts = aName.startsWith(search);
-        const bStarts = bName.startsWith(search);
+        const aName = normalizeForSearch(a.name);
+        const bName = normalizeForSearch(b.name);
+        const aStarts = aName.startsWith(normalizedSearch);
+        const bStarts = bName.startsWith(normalizedSearch);
 
         if (aStarts && !bStarts) return -1;
         if (!aStarts && bStarts) return 1;
@@ -161,7 +181,7 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
         return a.name.localeCompare(b.name);
       })
       .slice(0, SUGGESTIONS_LIMIT);
-  }, [pool, difficulty, guess, SUGGESTIONS_LIMIT]);
+  }, [pool, difficulty, guess, SUGGESTIONS_LIMIT, normalizeForSearch, matchesSearch]);
 
   // Check if guess matches the vehicle
   const checkGuessMatch = useCallback((valueToCheck: string): boolean => {

@@ -20,6 +20,7 @@ export default function App() {
   const [attemptsUsed, setAttemptsUsed] = useState(0);
   const [copied, setCopied] = useState(false);
   const [showDifficultyInfo, setShowDifficultyInfo] = useState<'easy' | 'hard' | 'daily' | null>(null);
+  const [tooltipsEnabled, setTooltipsEnabled] = useState(true);
 
   // Confetti effect for wins
   const [showConfetti, setShowConfetti] = useState(false);
@@ -91,7 +92,11 @@ export default function App() {
 
   const handleReturnToMenu = useCallback(() => {
     playSound('click');
+    setShowDifficultyInfo(null);
+    setTooltipsEnabled(false);
     setGameState(GameState.MENU);
+    // Re-enable tooltips after a short delay to prevent immediate hover triggers
+    setTimeout(() => setTooltipsEnabled(true), 300);
   }, []);
 
   const handleOpenServiceRecord = useCallback(() => {
@@ -172,7 +177,7 @@ export default function App() {
                   <div className="relative group">
                     <button
                       onClick={() => startGame(Difficulty.EASY)}
-                      onMouseEnter={() => setShowDifficultyInfo('easy')}
+                      onMouseEnter={() => tooltipsEnabled && setShowDifficultyInfo('easy')}
                       onMouseLeave={() => setShowDifficultyInfo(null)}
                       className="relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-gray-800 border border-gray-700 hover:border-green-500 hover:bg-gray-750 rounded-sm w-full sm:w-auto group"
                     >
@@ -203,7 +208,7 @@ export default function App() {
                   <div className="relative group">
                     <button
                       onClick={() => startGame(Difficulty.HARD)}
-                      onMouseEnter={() => setShowDifficultyInfo('hard')}
+                      onMouseEnter={() => tooltipsEnabled && setShowDifficultyInfo('hard')}
                       onMouseLeave={() => setShowDifficultyInfo(null)}
                       className="relative flex items-center justify-center px-6 py-4 font-bold text-black transition-all duration-200 bg-wt-orange hover:bg-white rounded-sm w-full sm:w-auto group"
                     >
@@ -237,7 +242,7 @@ export default function App() {
                         const today = new Date().toISOString().split('T')[0];
                         startGame(Difficulty.HARD, today);
                       }}
-                      onMouseEnter={() => setShowDifficultyInfo('daily')}
+                      onMouseEnter={() => tooltipsEnabled && setShowDifficultyInfo('daily')}
                       onMouseLeave={() => setShowDifficultyInfo(null)}
                       className="relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-blue-600 hover:bg-blue-500 border border-blue-400 rounded-sm w-full sm:w-auto group"
                     >
@@ -503,7 +508,7 @@ export default function App() {
 
         {/* Footer */}
         <footer className="relative z-10 text-center py-6 text-xs text-gray-600 font-mono">
-          <p>WT-GUESSER v1.4.0 // UNOFFICIAL WAR THUNDER API</p>
+          <p>WT-GUESSER v1.5.0 // UNOFFICIAL WAR THUNDER API</p>
         </footer>
 
         {/* Service Record Modal */}

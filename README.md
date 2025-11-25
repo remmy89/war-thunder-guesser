@@ -5,7 +5,7 @@
 A tactical vehicle identification game built with React, TypeScript, and Vite. Test your knowledge of War Thunder ground vehicles by identifying tanks based on progressively revealed intelligence data.
 
 ![Status](https://img.shields.io/badge/Status-Operational-green)
-![Version](https://img.shields.io/badge/Version-1.4.0-blue)
+![Version](https://img.shields.io/badge/Version-1.5.0-blue)
 ![Tech](https://img.shields.io/badge/Built%20With-React%2019%20%2B%20Tailwind-blue)
 ![License](https://img.shields.io/badge/License-MIT-orange)
 
@@ -108,7 +108,22 @@ war-thunder-guesser/
 └── vite-env.d.ts         # Vite TypeScript type definitions
 ```
 
-## 📝 What's New (v1.4.0)
+## 📝 What's New (v1.5.0)
+
+### Local Data & Offline Support
+- **Offline Mode:** Game now uses local JSON data instead of external API calls
+- **Faster Loading:** No network latency - instant game start
+- **Reliability:** No more API connection failures
+
+### Improved Search & Matching
+- **Flexible Search:** Typing "type 3" now matches "Type-3" (spaces, hyphens, underscores treated equivalently)
+- **Stricter Guess Validation:** Fixed false positives where partial matches like "Gaz 4m" incorrectly matched "Gaz Dshk"
+- **Deduplicated Suggestions:** Hard mode dropdown no longer shows duplicate vehicle names
+
+### UI/UX Fixes
+- **Tooltip Fix:** Difficulty tooltips no longer appear automatically when returning to menu after a game
+
+## 📝 Previous Updates (v1.4.0)
 
 ### Wordle-Style Comparative Feedback (Hard Mode)
 - **Smart Guess Analysis:** When you guess incorrectly in Hard Mode, you now see feedback comparing your guess to the target:

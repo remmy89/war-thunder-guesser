@@ -81,15 +81,31 @@ export const isFuzzyMatch = (input: string, target: string, convertRoman = false
 };
 
 /**
- * Check if token arrays match (one contains all tokens of the other)
+ * Check if token arrays match (must have significant overlap in both directions)
  */
 export const isTokenMatch = (tokensA: string[], tokensB: string[]): boolean => {
   if (tokensA.length === 0 || tokensB.length === 0) return false;
   
-  return (
-    tokensA.every(token => tokensB.includes(token)) ||
-    tokensB.every(token => tokensA.includes(token))
-  );
+  // Count how many tokens from A are in B
+  const aInB = tokensA.filter(token => tokensB.includes(token)).length;
+  // Count how many tokens from B are in A
+  const bInA = tokensB.filter(token => tokensA.includes(token)).length;
+  
+  // Require at least 80% match in both directions for longer token arrays
+  // For short arrays (1-2 tokens), require exact match
+  const minLength = Math.min(tokensA.length, tokensB.length);
+  const maxLength = Math.max(tokensA.length, tokensB.length);
+  
+  if (minLength <= 2) {
+    // For short names, require all tokens to match in both directions
+    return aInB === tokensA.length && bInA === tokensB.length;
+  }
+  
+  // For longer names, allow some flexibility but require high match ratio
+  const ratioA = aInB / tokensA.length;
+  const ratioB = bInA / tokensB.length;
+  
+  return ratioA >= 0.8 && ratioB >= 0.8;
 };
 
 /**
@@ -172,12 +188,6 @@ export const generateAliases = (name: string, id: string): string[] => {
   aliases.add(name.toLowerCase().replace(/-/g, ' '));
   aliases.add(name.toLowerCase().replace(/-/g, ''));
   aliases.add(name.toLowerCase().replace(/\s/g, ''));
-
-  // First word as alias
-  const nameParts = name.split(' ');
-  if (nameParts.length > 1) {
-    aliases.add(nameParts[0].toLowerCase());
-  }
 
   // Special cases
   if (name.toLowerCase().includes('pzkpfw')) {
