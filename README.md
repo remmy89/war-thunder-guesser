@@ -108,7 +108,7 @@ war-thunder-guesser/
 └── vite-env.d.ts         # Vite TypeScript type definitions
 ```
 
-## 📝 What's New (v1.4.1)
+## 📝 What's New (v1.5.1)
 
 ### Daily Challenge Improvements
 - **Once Per Day Limit:** Daily challenge can now only be played once per day - come back tomorrow for a new target!
