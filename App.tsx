@@ -7,7 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { Radar, Trophy, AlertOctagon, Play, ShieldAlert, RefreshCw, Crosshair, Skull, Calendar, Medal, HelpCircle, Info, Share2, Copy, Check, Sparkles } from 'lucide-react';
 import { initAudio, playSound } from './utils/audio';
 import { processGameResult } from './utils/achievements';
-import { getGameStats } from './utils/storage';
+import { getGameStats, isDailyChallengeCompleted, saveDailyCompleted } from './utils/storage';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState>(GameState.MENU);
@@ -21,6 +21,8 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [showDifficultyInfo, setShowDifficultyInfo] = useState<'easy' | 'hard' | 'daily' | null>(null);
   const [tooltipsEnabled, setTooltipsEnabled] = useState(true);
+  const [isDaily, setIsDaily] = useState(false);
+  const [dailyCompleted, setDailyCompleted] = useState(isDailyChallengeCompleted());
 
   // Confetti effect for wins
   const [showConfetti, setShowConfetti] = useState(false);
@@ -34,6 +36,7 @@ export default function App() {
     initAudio();
     playSound('start');
     setDifficulty(selectedDifficulty);
+    setIsDaily(!!seed);
     setGameState(GameState.LOADING);
     setLoadingError(null);
     setNewAchievements([]);
@@ -58,6 +61,12 @@ export default function App() {
       createConfetti();
     }
 
+    // Mark daily challenge as completed
+    if (isDaily) {
+      saveDailyCompleted();
+      setDailyCompleted(true);
+    }
+
     if (vehicle) {
       const stats = getGameStats();
       const { newUnlocks } = processGameResult(vehicle, won, attempts, stats.currentStreak);
@@ -67,7 +76,7 @@ export default function App() {
         setTimeout(() => playSound('win'), 500);
       }
     }
-  }, [vehicle, createConfetti]);
+  }, [vehicle, createConfetti, isDaily]);
 
   // Share result functionality
   const handleShare = useCallback(() => {
@@ -239,23 +248,35 @@ export default function App() {
                   <div className="relative group">
                     <button
                       onClick={() => {
+                        if (dailyCompleted) return;
                         const today = new Date().toISOString().split('T')[0];
                         startGame(Difficulty.HARD, today);
                       }}
                       onMouseEnter={() => tooltipsEnabled && setShowDifficultyInfo('daily')}
                       onMouseLeave={() => setShowDifficultyInfo(null)}
-                      className="relative flex items-center justify-center px-6 py-4 font-bold text-white transition-all duration-200 bg-blue-600 hover:bg-blue-500 border border-blue-400 rounded-sm w-full sm:w-auto group"
+                      disabled={dailyCompleted}
+                      className={`relative flex items-center justify-center px-6 py-4 font-bold transition-all duration-200 rounded-sm w-full sm:w-auto group ${
+                        dailyCompleted
+                          ? 'bg-gray-700 text-gray-400 border border-gray-600 cursor-not-allowed opacity-60'
+                          : 'text-white bg-blue-600 hover:bg-blue-500 border border-blue-400'
+                      }`}
                     >
                       <div className="flex flex-col items-center">
                         <div className="flex items-center mb-1">
                           <Calendar className="w-4 h-4 mr-2" aria-hidden="true" />
                           <span className="text-lg tracking-wider">DAILY</span>
                         </div>
-                        <span className="text-[10px] text-blue-200 uppercase tracking-widest font-mono">
-                          Global Target
+                        <span className={`text-[10px] uppercase tracking-widest font-mono ${
+                          dailyCompleted ? 'text-gray-500' : 'text-blue-200'
+                        }`}>
+                          {dailyCompleted ? 'Completed ✓' : 'Global Target'}
                         </span>
                       </div>
-                      <Sparkles className="absolute top-2 right-2 w-3 h-3 text-blue-300 animate-pulse" />
+                      {dailyCompleted ? (
+                        <Check className="absolute top-2 right-2 w-3 h-3 text-green-500" />
+                      ) : (
+                        <Sparkles className="absolute top-2 right-2 w-3 h-3 text-blue-300 animate-pulse" />
+                      )}
                     </button>
                     {showDifficultyInfo === 'daily' && (
                       <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 p-3 bg-[#1a1a1a] border border-gray-700 rounded-sm text-xs text-left w-64 z-50 animate-fade-in shadow-xl">
@@ -264,6 +285,9 @@ export default function App() {
                           <li>• Same vehicle for everyone today</li>
                           <li>• Compare with friends</li>
                           <li>• New target every 24 hours</li>
+                          {dailyCompleted && (
+                            <li className="text-green-400">✓ You've completed today's challenge!</li>
+                          )}
                         </ul>
                       </div>
                     )}
@@ -508,7 +532,7 @@ export default function App() {
 
         {/* Footer */}
         <footer className="relative z-10 text-center py-6 text-xs text-gray-600 font-mono">
-          <p>WT-GUESSER v1.5.0 // UNOFFICIAL WAR THUNDER API</p>
+          <p>WT-GUESSER v1.4.1 // UNOFFICIAL WAR THUNDER API</p>
         </footer>
 
         {/* Service Record Modal */}

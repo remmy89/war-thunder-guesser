@@ -73,3 +73,27 @@ export function getAchievementState(): AchievementState {
 export function saveAchievementState(state: AchievementState): boolean {
   return safeJsonStore(STORAGE_KEYS.ACHIEVEMENTS, state);
 }
+
+// Daily Challenge functions
+export function getDailyCompletedDate(): string | null {
+  return localStorage.getItem(STORAGE_KEYS.DAILY_COMPLETED);
+}
+
+export function isDailyChallengeCompleted(): boolean {
+  const completedDate = getDailyCompletedDate();
+  if (!completedDate) return false;
+  
+  const today = new Date().toISOString().split('T')[0];
+  return completedDate === today;
+}
+
+export function saveDailyCompleted(): boolean {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    localStorage.setItem(STORAGE_KEYS.DAILY_COMPLETED, today);
+    return true;
+  } catch (error) {
+    console.error('Failed to save daily completion:', error);
+    return false;
+  }
+}

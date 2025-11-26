@@ -12,6 +12,7 @@ export const GAME_CONFIG = {
 export const STORAGE_KEYS = {
   STATS: 'wt_guesser_stats',
   ACHIEVEMENTS: 'wt_guesser_achievements',
+  DAILY_COMPLETED: 'wt_guesser_daily_completed',
 } as const;
 
 

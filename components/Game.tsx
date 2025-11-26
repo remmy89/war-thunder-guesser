@@ -167,7 +167,12 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
       return true;
     });
 
-    return uniquePool
+    // Apply hint-based filtering (same as Easy mode)
+    let filteredByHints = uniquePool.filter((v) => v.nation === vehicle.nation);
+    if (attempts >= 1) filteredByHints = filteredByHints.filter((v) => v.rank === vehicle.rank);
+    if (attempts >= 3) filteredByHints = filteredByHints.filter((v) => v.vehicleType === vehicle.vehicleType);
+
+    return filteredByHints
       .filter((v) => matchesSearch(v.name, guess))
       .sort((a, b) => {
         const aName = normalizeForSearch(a.name);
@@ -181,7 +186,7 @@ export const Game: React.FC<GameProps> = ({ vehicle, pool, difficulty, onGameOve
         return a.name.localeCompare(b.name);
       })
       .slice(0, SUGGESTIONS_LIMIT);
-  }, [pool, difficulty, guess, SUGGESTIONS_LIMIT, normalizeForSearch, matchesSearch]);
+  }, [pool, difficulty, guess, SUGGESTIONS_LIMIT, normalizeForSearch, matchesSearch, vehicle.nation, vehicle.rank, vehicle.vehicleType, attempts]);
 
   // Check if guess matches the vehicle
   const checkGuessMatch = useCallback((valueToCheck: string): boolean => {
